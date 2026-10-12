@@ -4,8 +4,9 @@ Every passenger air route flying today on a globe, with each line's width set by
 fly the route in a year. Click an airport to see all its nonstop routes ranked by passengers, and
 click a route for its numbers, airlines and source.
 
-It's a static site (`index.html`, `app.js`, `style.css`, MapLibre GL in `vendor/`) that reads one
-data file, `data/flights.json`, built by the scripts in `pipeline/`. The base map streams from
+It's a static site (`index.html`, `app.js`, `style.css`, MapLibre GL in `vendor/`) that reads
+`data/flights.json` (and `data/others.json` after the map appears), both built by the scripts in
+`pipeline/`. The base map streams from
 OpenFreeMap.
 
 ```sh
@@ -68,8 +69,12 @@ Each route's count comes from the best source that has it:
    from scratch. The typical (median) route comes out within a factor of about 1.6–1.9 of the
    real count. That's good enough to tell a 50K route from a 500K one, not 400K from 500K.
 
-Counted routes cover about 58% of the 4.9 billion passengers a year on the map. The estimates
-show with ≈ in the panel and as dashed lines when an airport is selected.
+Counted routes cover about 58% of the 4.9 billion passengers a year on the map. Estimates are
+marked with ≈ in the panel.
+
+Airports with a code but no airline flights (general aviation fields like Boca Raton, air bases,
+closed or unfinished airports) are in `data/others.json` and show as grey italic codes when you
+zoom in.
 
 ## Rebuilding the data
 
@@ -82,7 +87,7 @@ cd pipeline
 python3 build_measured.py              # official statistics (see MEASURED.md for options)
 python3 fetch_wikipedia.py --refresh   # ~4,100 airport articles; takes about an hour
 python3 parse_wikipedia.py             # current routes, airport totals, busiest-routes tables
-python3 build_routes.py                # writes ../data/flights.json and prints the checks
+python3 build_routes.py                # writes ../data/flights.json and others.json, prints the checks
 ```
 
 ## Sources and licenses

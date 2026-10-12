@@ -15,7 +15,7 @@ function unpack(d) {
   const a = d.airports, n = a.code.length;
   const air = Array.from({ length: n }, (_, i) => ({
     i, code: a.code[i], name: a.name[i], city: a.city[i], town: a.town ? a.town[i] : '', cc: a.country[i],
-    lat: a.lat[i], lon: a.lon[i], pax: 0, routes: [],
+    lat: a.lat[i], lon: a.lon[i], pax: 0, routes: [], other: false,
   }));
   const r = d.routes;
   const routes = r.a.map((ai, i) => {
@@ -40,10 +40,10 @@ function distance(x, y) {
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
-// the great circle from x to y as [lon, lat] points about every 120 km, in pieces split where it
+// the great circle from x to y as [lon, lat] points about every 250 km, in pieces split where it
 // crosses the antimeridian (the globe has one world: a longitude past ±180 would leave its surface)
 function arc(x, y, km) {
-  const n = Math.max(2, Math.ceil(km / 120));
+  const n = Math.max(2, Math.ceil(km / 250));
   const f1 = x.lat * RAD, l1 = x.lon * RAD, f2 = y.lat * RAD, l2 = y.lon * RAD;
   const p1 = [Math.cos(f1) * Math.cos(l1), Math.cos(f1) * Math.sin(l1), Math.sin(f1)];
   const p2 = [Math.cos(f2) * Math.cos(l2), Math.cos(f2) * Math.sin(l2), Math.sin(f2)];
@@ -91,23 +91,27 @@ function isDark() {
 }
 const PAL = {
   light: { land:'#F2F0EB', water:'#D9E4EA', bnd:'#C3BCB1', label:'#8E8A84', halo:'#F2F0EB', space:'#E9E7E1',
-           horizon:'#FFFFFF', route:'#2E4FA8', routeOp:.26, hot:'#E0542E', dot:'#1C1C1E', dotEdge:'#FFFFFF', text:'#1C1C1E' },
+           horizon:'#FFFFFF', route:'#2E4FA8', routeOp:.26, faded:'#8E8A84', fadedOp:.07, hot:'#E0542E',
+           dot:'#1C1C1E', dotEdge:'#FFFFFF', text:'#1C1C1E', muted:'#7E7E85' },
   dark:  { land:'#2A2C30', water:'#1A1C20', bnd:'#4A4D53', label:'#7C7E84', halo:'#1A1C20', space:'#0E0F11',
-           horizon:'#3A4352', route:'#7FB2FF', routeOp:.26, hot:'#FF9F5A', dot:'#F2F2F7', dotEdge:'#1A1C20', text:'#F2F2F7' },
+           horizon:'#3A4352', route:'#7FB2FF', routeOp:.26, faded:'#8A8C92', fadedOp:.06, hot:'#FF9F5A',
+           dot:'#F2F2F7', dotEdge:'#1A1C20', text:'#F2F2F7', muted:'#94969C' },
 };
 const pal = () => PAL[isDark() ? 'dark' : 'light'];
 
 const OFM = 'https://tiles.openfreemap.org';
 const FONT = ['Noto Sans Regular'];
 const FONT_BOLD = ['Noto Sans Bold'];
+const FONT_ITALIC = ['Noto Sans Italic'];
+const EMPTY = { type: 'FeatureCollection', features: [] };
 
 // line width in pixels: the square root of passengers, so a 10M route is ~3x a 1M one, not 10x
 const W = ['sqrt', ['/', ['get', 'p'], 1e6]];
-const lineWidth = (k = 1, min = 0) => ['interpolate', ['exponential', 1.6], ['zoom'],
-  0, ['max', 0.25 + min, ['*', 1.1 * k, W]],
-  3, ['max', 0.35 + min, ['*', 2 * k, W]],
-  6, ['max', 0.7 + min, ['*', 4.5 * k, W]],
-  10, ['max', 1.2 + min, ['*', 10 * k, W]]];
+const lineWidth = (k = 1, min = 0, add = 0) => ['interpolate', ['exponential', 1.6], ['zoom'],
+  0, ['+', add, ['max', 0.25 + min, ['*', 1.1 * k, W]]],
+  3, ['+', add, ['max', 0.35 + min, ['*', 2 * k, W]]],
+  6, ['+', add, ['max', 0.7 + min, ['*', 4.5 * k, W]]],
+  10, ['+', add, ['max', 1.2 + min, ['*', 10 * k, W]]]];
 const dotRadius = (add = 0) => ['interpolate', ['linear'], ['zoom'],
   0, ['+', 0.8 + add, ['*', 0.45, ['sqrt', ['/', ['get', 'p'], 1e6]]]],
   4, ['+', 1.6 + add, ['*', 0.9, ['sqrt', ['/', ['get', 'p'], 1e6]]]],
@@ -138,42 +142,54 @@ function baseStyle(p) {
   };
 }
 
+// Every route sits in one big source that is never filtered or restyled per feature after load:
+// selecting or hovering copies the few routes involved into small sources drawn on top, so the
+// map never has to rebuild the 34,000-route layer.
 function addFlightLayers(p) {
-  map.addSource('routes', { type: 'geojson', data: routeGeo, promoteId: 'i', buffer: 4, tolerance: 0.3 });
-  map.addSource('airports', { type: 'geojson', data: airportGeo, promoteId: 'i' });
-  map.addLayer({ id: 'routes', type: 'line', source: 'routes',
-    layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
+  map.addSource('routes', { type: 'geojson', data: routeGeo, buffer: 2, tolerance: 0.4, maxzoom: 6 });
+  map.addSource('airports', { type: 'geojson', data: airportGeo, maxzoom: 10 });
+  map.addSource('others', { type: 'geojson', data: EMPTY, maxzoom: 10 });
+  map.addSource('focus', { type: 'geojson', data: EMPTY, maxzoom: 8 });
+  map.addSource('focus-airports', { type: 'geojson', data: EMPTY, maxzoom: 10 });
+  map.addSource('hover', { type: 'geojson', data: EMPTY, maxzoom: 8 });
+  map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-sort-key': ['get', 'p'] },
     paint: { 'line-color': p.route, 'line-opacity': p.routeOp, 'line-width': lineWidth() } });
-  // the selected airport's routes: measured solid, estimated dashed
-  for (const [id, est] of [['sel', 0], ['sel-est', 1]]) {
-    map.addLayer({ id, type: 'line', source: 'routes', filter: ['==', ['get', 'i'], -1],
-      layout: { 'line-cap': est ? 'butt' : 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
-      paint: { 'line-color': p.hot, 'line-opacity': 0.9, 'line-width': lineWidth(1.6, 0.8),
-               ...(est ? { 'line-dasharray': [2, 1.2] } : {}) } });
-  }
-  map.addLayer({ id: 'hover', type: 'line', source: 'routes', filter: ['==', ['get', 'i'], -1],
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': p.text, 'line-opacity': 0.9, 'line-width': lineWidth(1.6, 1.2) } });
+  // airports without airline routes: small grey dots, grey italic codes
+  map.addLayer({ id: 'others', type: 'circle', source: 'others', minzoom: 3.5,
+    paint: { 'circle-color': p.muted, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 3.5, 1.2, 8, 3],
+             'circle-opacity': 0.7, 'circle-pitch-alignment': 'map' } });
+  map.addLayer({ id: 'others-label', type: 'symbol', source: 'others', minzoom: 5,
+    layout: { 'text-field': ['get', 'code'], 'text-font': FONT_ITALIC, 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 9, 12],
+              'text-offset': [0, 0.8], 'text-anchor': 'top', 'text-padding': 4 },
+    paint: { 'text-color': p.muted, 'text-halo-color': p.halo, 'text-halo-width': 1.6, 'text-opacity': 0.9 } });
   map.addLayer({ id: 'airports', type: 'circle', source: 'airports',
     layout: { 'circle-sort-key': ['get', 'p'] },
     paint: { 'circle-color': p.dot, 'circle-radius': dotRadius(), 'circle-stroke-color': p.dotEdge,
              'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 0, 0.3, 5, 1],
-             'circle-opacity': 0.85, 'circle-stroke-opacity': 0.85,
-             'circle-pitch-alignment': 'map' } });
-  map.addLayer({ id: 'airports-hot', type: 'circle', source: 'airports', filter: ['==', ['get', 'i'], -1],
-    paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 1.8, 5, 3.2, 9, 5],
-             'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 1, 'circle-pitch-alignment': 'map' } });
-  map.addLayer({ id: 'airport-sel', type: 'circle', source: 'airports', filter: ['==', ['get', 'i'], -1],
-    paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4, 5, 7, 9, 10],
-             'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 2, 'circle-pitch-alignment': 'map' } });
+             'circle-opacity': 0.85, 'circle-stroke-opacity': 0.85, 'circle-pitch-alignment': 'map' } });
   map.addLayer({ id: 'airport-label', type: 'symbol', source: 'airports', minzoom: 3,
     layout: { 'text-field': ['get', 'code'], 'text-font': FONT_BOLD, 'text-size': ['interpolate', ['linear'], ['zoom'], 2, 10, 7, 13],
               'text-offset': [0, 0.9], 'text-anchor': 'top', 'symbol-sort-key': ['-', ['get', 'p']], 'text-padding': 6 },
     paint: { 'text-color': p.text, 'text-halo-color': p.halo, 'text-halo-width': 1.4, 'text-opacity': 0.85 } });
-  map.addLayer({ id: 'airport-label-hot', type: 'symbol', source: 'airports', filter: ['==', ['get', 'i'], -1],
-    layout: { 'text-field': ['get', 'code'], 'text-font': FONT_BOLD, 'text-size': 12, 'text-offset': [0, 0.9],
-              'text-anchor': 'top', 'symbol-sort-key': ['-', ['get', 'p']], 'text-padding': 2 },
-    paint: { 'text-color': p.hot, 'text-halo-color': p.halo, 'text-halo-width': 1.6 } });
+  // the selected airport's routes, outlined so they stand clear of everything else
+  map.addLayer({ id: 'focus-halo', type: 'line', source: 'focus',
+    layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
+    paint: { 'line-color': p.halo, 'line-opacity': 0.9, 'line-width': lineWidth(2.2, 1, 2.5) } });
+  map.addLayer({ id: 'focus', type: 'line', source: 'focus',
+    layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
+    paint: { 'line-color': p.hot, 'line-opacity': 1, 'line-width': lineWidth(2.2, 1) } });
+  map.addLayer({ id: 'hover', type: 'line', source: 'hover', layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': p.text, 'line-opacity': 0.95, 'line-width': lineWidth(2.2, 1.6) } });
+  map.addLayer({ id: 'focus-dots', type: 'circle', source: 'focus-airports', filter: ['!=', ['get', 'sel'], 1],
+    paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 5, 3.5, 9, 5.5],
+             'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 1.2, 'circle-pitch-alignment': 'map' } });
+  map.addLayer({ id: 'focus-sel', type: 'circle', source: 'focus-airports', filter: ['==', ['get', 'sel'], 1],
+    paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4.5, 5, 7.5, 9, 10],
+             'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 2.5, 'circle-pitch-alignment': 'map' } });
+  map.addLayer({ id: 'focus-label', type: 'symbol', source: 'focus-airports',
+    layout: { 'text-field': ['get', 'code'], 'text-font': FONT_BOLD, 'text-size': ['case', ['==', ['get', 'sel'], 1], 14, 12],
+              'text-offset': [0, 0.9], 'text-anchor': 'top', 'symbol-sort-key': ['-', ['get', 'p']], 'text-padding': 2 },
+    paint: { 'text-color': p.hot, 'text-halo-color': p.halo, 'text-halo-width': 1.8 } });
 }
 
 function applyTheme() {
@@ -184,18 +200,20 @@ function applyTheme() {
   map.setPaintProperty('boundary', 'line-color', p.bnd);
   map.setPaintProperty('country-label', 'text-color', p.label);
   map.setPaintProperty('country-label', 'text-halo-color', p.halo);
-  map.setPaintProperty('routes', 'line-color', p.route);
-  for (const id of ['sel', 'sel-est']) map.setPaintProperty(id, 'line-color', p.hot);
-  for (const id of ['airports-hot', 'airport-sel']) {
+  map.setPaintProperty('focus-halo', 'line-color', p.halo);
+  map.setPaintProperty('focus', 'line-color', p.hot);
+  map.setPaintProperty('hover', 'line-color', p.text);
+  for (const id of ['focus-dots', 'focus-sel']) {
     map.setPaintProperty(id, 'circle-color', p.hot);
     map.setPaintProperty(id, 'circle-stroke-color', p.dotEdge);
   }
-  map.setPaintProperty('hover', 'line-color', p.text);
   map.setPaintProperty('airports', 'circle-color', p.dot);
   map.setPaintProperty('airports', 'circle-stroke-color', p.dotEdge);
-  for (const id of ['airport-label', 'airport-label-hot']) map.setPaintProperty(id, 'text-halo-color', p.halo);
+  map.setPaintProperty('others', 'circle-color', p.muted);
+  map.setPaintProperty('others-label', 'text-color', p.muted);
+  for (const id of ['airport-label', 'focus-label', 'others-label']) map.setPaintProperty(id, 'text-halo-color', p.halo);
   map.setPaintProperty('airport-label', 'text-color', p.text);
-  map.setPaintProperty('airport-label-hot', 'text-color', p.hot);
+  map.setPaintProperty('focus-label', 'text-color', p.hot);
   showSelection();
 }
 
@@ -216,12 +234,14 @@ function buildGeo() {
     properties: { i: r.i, a: r.a, b: r.b, p: r.pax, e: isEst(r) ? 1 : 0, d: r.dom ? 1 : 0 },
     geometry: { type: 'MultiLineString', coordinates: arc(A[r.a], A[r.b], r.km) },
   })) };
-  airportGeo = { type: 'FeatureCollection', features: A.filter(x => x.routes.length).map(x => ({
-    type: 'Feature',
-    properties: { i: x.i, code: x.code, p: x.pax },
-    geometry: { type: 'Point', coordinates: [x.lon, x.lat] },
-  })) };
+  airportGeo = { type: 'FeatureCollection', features: A.filter(x => x.routes.length).map(x => point(x)) };
 }
+const point = (x, sel = false) => ({
+  type: 'Feature',
+  properties: { i: x.i, code: x.code, p: x.pax, sel: sel ? 1 : 0 },
+  geometry: { type: 'Point', coordinates: [x.lon, x.lat] },
+});
+const collection = features => ({ type: 'FeatureCollection', features });
 
 // ---------------------------------------------------------------- state
 const S = {
@@ -241,32 +261,37 @@ function overviewFilter() {
   return f;
 }
 
+const selecting = () => S.airport !== null || S.route !== null;
+
 function showSelection() {
-  if (!map || !map.getLayer('sel')) return;
-  const p = pal();
-  let ids = [];
-  if (S.route !== null) ids = [S.route];
-  else if (S.airport !== null) ids = A[S.airport].routes;
-  const est = ids.filter(i => isEst(R[i])), meas = ids.filter(i => !isEst(R[i]));
-  map.setFilter('sel', ['in', ['get', 'i'], ['literal', meas]]);
-  map.setFilter('sel-est', ['in', ['get', 'i'], ['literal', est]]);
-  map.setFilter('routes', ids.length ? ['all', overviewFilter(), ['!', ['in', ['get', 'i'], ['literal', ids]]]] : overviewFilter());
-  map.setPaintProperty('routes', 'line-opacity', ids.length ? (S.route !== null ? 0.05 : isDark() ? 0.07 : 0.09) : p.routeOp);
-  const spots = new Set();
-  for (const i of ids) { spots.add(R[i].a); spots.add(R[i].b); }
-  const list = [...spots];
-  map.setFilter('airports-hot', ['in', ['get', 'i'], ['literal', list]]);
-  map.setFilter('airport-sel', ['==', ['get', 'i'], S.route === null && S.airport !== null ? S.airport : -1]);
-  map.setFilter('airport-label-hot', ['in', ['get', 'i'], ['literal', list]]);
-  map.setPaintProperty('airports', 'circle-opacity', ids.length ? 0.35 : 0.85);
-  map.setPaintProperty('airports', 'circle-stroke-opacity', ids.length ? 0.35 : 0.85);
-  map.setLayoutProperty('airport-label', 'visibility', ids.length ? 'none' : 'visible');
-  setHover(S.hover);
+  if (!map || !map.getSource('focus')) return;
+  const p = pal(), on = selecting();
+  const ids = S.route !== null ? [S.route] : S.airport !== null ? A[S.airport].routes : [];
+  map.getSource('focus').setData(collection(ids.map(i => routeGeo.features[i])));
+  const spots = new Map();
+  for (const i of ids) for (const k of [R[i].a, R[i].b]) spots.set(k, A[k]);
+  if (S.airport !== null) spots.set(S.airport, A[S.airport]);
+  const sel = S.route === null ? S.airport : null;
+  map.getSource('focus-airports').setData(collection([...spots.values()].map(x => point(x, x.i === sel))));
+  // everything else fades to grey (constant paint values: no re-layout)
+  map.setPaintProperty('routes', 'line-color', on ? p.faded : p.route);
+  map.setPaintProperty('routes', 'line-opacity', on ? p.fadedOp : p.routeOp);
+  map.setPaintProperty('airports', 'circle-opacity', on ? 0.15 : 0.85);
+  map.setPaintProperty('airports', 'circle-stroke-opacity', on ? 0.15 : 0.85);
+  map.setPaintProperty('airport-label', 'text-opacity', on ? 0 : 0.85);
+  map.setPaintProperty('others', 'circle-opacity', on ? 0.25 : 0.7);
+  map.setPaintProperty('others-label', 'text-opacity', on ? 0.4 : 0.9);
+}
+
+// only the overview's route filters touch the big layer, and only when they change
+function applyFilters() {
+  if (map && map.getLayer('routes')) map.setFilter('routes', S.min || !S.dom || !S.intl ? overviewFilter() : null);
 }
 
 function setHover(i) {
+  if (i === S.hover) return;
   S.hover = i;
-  if (map && map.getLayer('hover')) map.setFilter('hover', ['==', ['get', 'i'], i === null ? -1 : i]);
+  if (map && map.getSource('hover')) map.getSource('hover').setData(collection(i === null ? [] : [routeGeo.features[i]]));
   document.querySelectorAll('.row.hl').forEach(el => el.classList.remove('hl'));
   if (i !== null) document.querySelectorAll(`.row[data-route="${i}"]`).forEach(el => el.classList.add('hl'));
 }
@@ -297,6 +322,9 @@ function routeRow(r, from, top) {
 }
 
 function airportRow(x) {
+  if (x.other) return `<button class="row other" data-airport="${x.i}"><span class="code">${esc(x.code)}</span>
+    <span class="t"><b>${esc(x.name)}</b><span>${esc(place(x))}</span></span>
+    <span class="n"><small>no airline<br>flights</small></span></button>`;
   return `<button class="row" data-airport="${x.i}"><span class="code">${esc(x.code)}</span>
     <span class="t"><b>${esc(x.name)}</b><span>${esc(place(x))}</span></span>
     <span class="n">${fmtPax(x.pax)}<small>${x.routes.length} routes</small></span></button>`;
@@ -306,7 +334,7 @@ function overview() {
   const total = R.reduce((s, r) => s + r.pax, 0);
   const measured = R.reduce((s, r) => s + (isEst(r) ? 0 : r.pax), 0);
   const live = A.filter(x => x.routes.length).length;
-  const topRoutes = [...R].sort((p, q) => q.pax - p.pax).slice(0, 12);
+  const topRoutes = R.slice(0, 12);   // the file lists routes busiest first
   const topAirports = A.filter(x => x.routes.length).sort((p, q) => q.pax - p.pax).slice(0, 12);
   const seg = (vals) => vals.map(([v, label]) => `<button data-min="${v}" aria-pressed="${S.min === v}">${label}</button>`).join('');
   const legend = [[1e5, '100K passengers a year'], [1e6, '1 million'], [1e7, '10 million']].map(([v, label]) =>
@@ -317,15 +345,18 @@ function overview() {
     <div><b>${(total / 1e9).toFixed(2)}B</b><span>passengers a year</span></div></div>
   <div class="opts"><span>Show routes</span><span class="seg" id="minseg">${seg([[0, 'All'], [1e5, '100K+'], [1e6, '1M+']])}</span></div>
   <div class="chips"><button class="chip" id="cdom" aria-pressed="${S.dom}">Domestic</button><button class="chip" id="cintl" aria-pressed="${S.intl}">International</button></div>
-  <div class="legend">${legend}<i class="hot" style="height:2px"></i><span>Selected airport's routes</span><i class="dash"></i><span>Selected, passengers estimated</span></div>
-  <div class="sec">Busiest routes</div>${topRoutes.map(r => routeRow(r, null, topRoutes[0].pax)).join('')}
+  <div class="legend">${legend}<i class="hot" style="height:3px"></i><span>Selected airport’s routes</span></div>
   <div class="sec">Busiest airports</div>${topAirports.map(airportRow).join('')}
+  <div class="sec">Busiest routes</div>${topRoutes.map(r => routeRow(r, null, topRoutes[0].pax)).join('')}
   <div class="note small">Routes are the ones airlines fly as of ${esc(D.routes_as_of)}, from Wikipedia's airport pages.
     Passengers are counted for ${Math.round(100 * measured / total)}% of travel (${esc([...new Set(D.sources.filter(s => s.id).map(s => s.short))].join(', '))});
     the rest are estimates fitted to each airport’s annual total. <a href="${esc(D.about)}" target="_blank" rel="noopener">How this was made</a></div>`;
 }
 
 function airportView(x) {
+  if (x.other) return `<button class="back" data-back>${BACK}All routes</button>
+  <div class="dhead other"><span class="code big">${esc(x.code)}</span><div><h2>${esc(x.name)}</h2><div class="sub">${esc(place(x))}</div></div></div>
+  <div class="note">No scheduled airline flights. Airports like this one serve private planes, air taxis, the military, or have closed or not yet opened.</div>`;
   const routes = x.routes.map(i => R[i]);
   const countries = new Set(routes.map(r => A[r.a === x.i ? r.b : r.a].cc));
   const est = routes.filter(isEst).reduce((s, r) => s + r.pax, 0);
@@ -336,7 +367,7 @@ function airportView(x) {
     <div><b>${routes.length}</b><span>nonstop destinations</span></div><div><b>${countries.size}</b><span>countries</span></div></div>
   <div class="sec">Destinations by passengers</div>
   ${routes.map(r => routeRow(r, x.i, top)).join('') || '<div class="note">No current passenger routes.</div>'}
-  ${est ? `<div class="note small">≈ marks estimated passengers. Dashed lines on the map are estimates too.</div>` : ''}`;
+  ${est ? `<div class="note small">≈ marks estimated passengers.</div>` : ''}`;
 }
 
 // where a route's passenger count comes from, in a sentence
@@ -368,7 +399,7 @@ function routeView(r) {
 let index = null;
 const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 function search(q) {
-  if (!index) index = A.filter(x => x.routes.length).map(x => ({ x, code: x.code.toLowerCase(), text: fold([x.name, x.city, x.town, country(x.cc)].join(' ')) }));
+  if (!index) index = A.filter(x => x.routes.length || x.other).map(x => ({ x, code: x.code.toLowerCase(), text: fold([x.name, x.city, x.town, country(x.cc)].join(' ')) }));
   const f = fold(q).trim();
   if (!f) return [];
   const words = f.split(/\s+/);
@@ -378,7 +409,7 @@ function search(q) {
     if (e.code === f) score = 100;
     else if (words.every(w => e.text.includes(w))) score = 10 + (e.text.startsWith(f) ? 5 : 0) + (fold(e.x.city).startsWith(f) ? 5 : 0);
     else if (f.length >= 2 && e.code.startsWith(f)) score = 8;
-    if (score) hits.push([score + Math.log10(1 + e.x.pax) / 10, e.x]);
+    if (score) hits.push([score + Math.log10(1 + e.x.pax) / 10 - (e.x.other ? 1 : 0), e.x]);
   }
   return hits.sort((p, q) => q[0] - p[0]).slice(0, 40).map(h => h[1]);
 }
@@ -393,7 +424,8 @@ function selectAirport(i, { fly = true } = {}) {
   setHover(null); render(); showSelection(); writeHash();
   if (fly && i !== null) {
     const x = A[i];
-    map.easeTo({ center: [x.lon, x.lat], zoom: Math.max(map.getZoom(), phone() ? 1.2 : 1.9), duration: 900, padding: panelPadding() });
+    const zoom = Math.max(map.getZoom(), x.other ? 5.5 : phone() ? 1.2 : 1.9);
+    map.easeTo({ center: [x.lon, x.lat], zoom, duration: 900, padding: panelPadding() });
   }
 }
 function selectRoute(i, { fly = true } = {}) {
@@ -421,12 +453,13 @@ function writeHash() {
   else if (S.airport !== null) h = '#' + A[S.airport].code;
   if (location.hash !== h) history.replaceState(null, '', h || location.pathname + location.search);
 }
+let hashWaits = false, othersLoaded = false;   // a link to an airport without routes waits for others.json
 function readHash() {
   const m = decodeURIComponent(location.hash.slice(1)).toUpperCase().match(/^([A-Z0-9]{3})(?:-([A-Z0-9]{3}))?$/);
   if (!m) return;
-  const byCode = c => A.find(x => x.code === c && x.routes.length);
+  const byCode = c => A.find(x => x.code === c && (x.routes.length || x.other));
   const x = byCode(m[1]);
-  if (!x) return;
+  if (!x) { hashWaits = !othersLoaded; return; }
   if (!m[2]) { selectAirport(x.i); return; }
   const y = byCode(m[2]);
   const r = y && x.routes.map(i => R[i]).find(r => r.a === y.i || r.b === y.i);
@@ -440,12 +473,12 @@ body.addEventListener('click', e => {
   if (t.hasAttribute('data-back')) back();
   else if (t.dataset.route !== undefined) selectRoute(+t.dataset.route);
   else if (t.dataset.airport !== undefined) selectAirport(+t.dataset.airport);
-  else if (t.dataset.min !== undefined) { S.min = +t.dataset.min; render(); showSelection(); }
+  else if (t.dataset.min !== undefined) { S.min = +t.dataset.min; render(); applyFilters(); }
   else if (t.id === 'cdom' || t.id === 'cintl') {
     const k = t.id === 'cdom' ? 'dom' : 'intl';
     S[k] = !S[k];
     if (!S.dom && !S.intl) S[k === 'dom' ? 'intl' : 'dom'] = true;
-    render(); showSelection();
+    render(); applyFilters();
   }
 });
 body.addEventListener('mouseover', e => {
@@ -476,32 +509,70 @@ $('#proj').addEventListener('click', () => {
   $('#proj').title = flat ? 'Globe' : 'Flat map';
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.activeElement !== $('#q') && (S.airport !== null || S.route !== null)) back();
+  if (e.key === 'Escape' && document.activeElement !== $('#q') && selecting()) back();
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (map && map.getLayer('routes')) applyTheme(); });
 
-// map hover and click: airports first, then routes
+// map hover and click: airports first; routes only those of the selected airport (in the overview
+// there are far too many under the cursor for hovering them to mean anything)
 const tip = $('#tip');
 function pick(point) {
   const box = (r) => [[point.x - r, point.y - r], [point.x + r, point.y + r]];
-  const air = map.queryRenderedFeatures(box(7), { layers: ['airport-sel', 'airports-hot', 'airports'] });
+  const layers = selecting() ? ['focus-sel', 'focus-dots', 'airports'] : ['airports'];
+  if (map.getZoom() >= 3.5 && map.getLayer('others')) layers.push('others');
+  const air = map.queryRenderedFeatures(box(7), { layers });
   if (air.length) {
-    air.sort((p, q) => q.properties.p - p.properties.p);
+    const rank = f => (f.layer.id.startsWith('focus') ? 1e12 : 0) + f.properties.p;
+    air.sort((p, q) => rank(q) - rank(p));
     return { airport: air[0].properties.i };
   }
-  const layers = S.airport !== null || S.route !== null ? ['sel', 'sel-est'] : ['routes'];
-  const lines = map.queryRenderedFeatures(box(4), { layers });
-  if (lines.length) {
-    lines.sort((p, q) => q.properties.p - p.properties.p);
-    return { route: lines[0].properties.i };
+  if (selecting()) {
+    const lines = map.queryRenderedFeatures(box(5), { layers: ['focus'] });
+    if (lines.length) {
+      lines.sort((p, q) => q.properties.p - p.properties.p);
+      return { route: lines[0].properties.i };
+    }
   }
   return {};
 }
-function showTip(point, html) {
-  if (!html) { tip.classList.remove('show'); return; }
-  tip.innerHTML = html;
+let tipKey = null;
+function showTip(point, key, html) {
+  if (!key) { tip.classList.remove('show'); tipKey = null; return; }
+  if (key !== tipKey) { tip.innerHTML = html(); tipKey = key; }
   tip.style.left = point.x + 'px'; tip.style.top = point.y + 'px';
   tip.classList.add('show');
+}
+function hoverAt(point) {
+  const hit = pick(point);
+  map.getCanvasContainer().classList.toggle('pointer', hit.airport !== undefined || hit.route !== undefined);
+  if (hit.airport !== undefined) {
+    const x = A[hit.airport];
+    setHover(null);
+    showTip(point, 'a' + x.i, () => x.other
+      ? `<b>${esc(x.code)}</b> <i>${esc(x.name)}</i><br><span>${esc(place(x))} · no airline flights</span>`
+      : `<b>${esc(x.code)}</b> ${esc(x.name)}<br><span>${esc(place(x))} · ${fmtPax(x.pax)} passengers · ${x.routes.length} routes</span>`);
+  } else if (hit.route !== undefined) {
+    const r = R[hit.route];
+    setHover(r.i);
+    showTip(point, 'r' + r.i, () => `<b>${esc(A[r.a].code)} – ${esc(A[r.b].code)}</b> ${esc(A[r.a].city)} – ${esc(A[r.b].city)}<br><span>${paxLabel(r)} passengers a year${isEst(r) ? ' (estimate)' : ''}</span>`);
+  } else { setHover(null); showTip(point, null); }
+}
+
+function loadOthers() {
+  fetch('data/others.json').then(r => r.json()).then(o => {
+    Object.assign(D.countries, o.countries);
+    const features = o.code.map((code, k) => {
+      const x = { i: A.length, code, name: o.name[k], city: o.city[k], town: '', cc: o.country[k],
+                  lat: o.lat[k], lon: o.lon[k], pax: 0, routes: [], other: true };
+      A.push(x);
+      return point(x);
+    });
+    map.getSource('others').setData(collection(features));
+    othersLoaded = true;
+    index = null;
+    if (S.q) render();
+    if (hashWaits) readHash();
+  }).catch(err => console.warn('No list of other airports', err));
 }
 
 function initMap() {
@@ -516,28 +587,23 @@ function initMap() {
     showSelection();
     readHash();
     $('#loading').classList.add('done');
+    loadOthers();
   });
+  // at most one lookup per frame, and none while the map is being dragged or zoomed
+  let at = null, frame = 0;
   map.on('mousemove', e => {
-    if (!map.getLayer('routes')) return;
-    const hit = pick(e.point);
-    map.getCanvasContainer().classList.toggle('pointer', hit.airport !== undefined || hit.route !== undefined);
-    if (hit.airport !== undefined) {
-      const x = A[hit.airport];
-      setHover(null);
-      showTip(e.point, `<b>${esc(x.code)}</b> ${esc(x.name)}<br><span>${esc(place(x))} · ${fmtPax(x.pax)} passengers · ${x.routes.length} routes</span>`);
-    } else if (hit.route !== undefined) {
-      const r = R[hit.route];
-      setHover(r.i);
-      showTip(e.point, `<b>${esc(A[r.a].code)} – ${esc(A[r.b].code)}</b> ${esc(A[r.a].city)} – ${esc(A[r.b].city)}<br><span>${paxLabel(r)} passengers a year${isEst(r) ? ' (estimate)' : ''}</span>`);
-    } else { setHover(null); showTip(e.point, null); }
+    at = e.point;
+    if (frame || !map.getLayer('routes')) return;
+    frame = requestAnimationFrame(() => { frame = 0; if (!map.isMoving()) hoverAt(at); });
   });
+  map.on('movestart', () => showTip(null, null));
   map.on('mouseout', () => { setHover(null); showTip(null, null); });
   map.on('click', e => {
     const hit = pick(e.point);
     showTip(null, null);
     if (hit.airport !== undefined) selectAirport(hit.airport, { fly: false });
     else if (hit.route !== undefined) selectRoute(hit.route, { fly: false });
-    else if (S.airport !== null || S.route !== null) { S.route = null; S.from = null; selectAirport(null, { fly: false }); }
+    else if (selecting()) { S.route = null; S.from = null; selectAirport(null, { fly: false }); }
   });
 }
 

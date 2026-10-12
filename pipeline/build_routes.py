@@ -1,4 +1,5 @@
-"""Combine current routes and passenger counts into the site's data file, ../data/flights.json.
+"""Combine current routes and passenger counts into the site's data file, ../data/flights.json,
+and list the airports without airline routes in ../data/others.json.
 
 Inputs (see ../README.md for how each is made):
     build/wiki_routes.csv       routes flying now, from Wikipedia's airport pages (parse_wikipedia.py)
@@ -529,12 +530,37 @@ def write(routes, wiki, airports, countries, measured_sources, today):
     }
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')))
+    write_others(set(used), countries)
     total = sum(r['ab'] + r['ba'] for r in routes.values())
     share = {s: sum(r['ab'] + r['ba'] for r in routes.values() if r['source'] == s) / total
              for s in {r['source'] for r in routes.values()}}
     print(f'Wrote {OUT.relative_to(HERE.parent)}: {len(used)} airports, {len(routes)} routes, '
           f'{total / 1e9:.2f}B passengers a year, {OUT.stat().st_size / 1e6:.1f} MB')
     print('  share of passengers by source: ' + ', '.join(f'{s} {100 * v:.0f}%' for s, v in sorted(share.items(), key=lambda kv: -kv[1])))
+
+
+def write_others(used, countries):
+    """../data/others.json: airports with a code but no airline routes (general aviation fields,
+    air bases, closed or unfinished airports), which the map shows in grey."""
+    others = {}
+    with open(CACHE / 'airports.csv', newline='') as f:
+        for row in csv.DictReader(f):
+            code = row['iata_code'].strip()
+            if code and code not in used and code not in others and row['type'] in ('large_airport', 'medium_airport', 'small_airport'):
+                others[code] = row
+    codes = sorted(others)
+    data = {
+        'code': codes,
+        'name': [others[c]['name'] for c in codes],
+        'city': [others[c]['municipality'] for c in codes],
+        'country': [others[c]['iso_country'] for c in codes],
+        'lat': [round(float(others[c]['latitude_deg']), 4) for c in codes],
+        'lon': [round(float(others[c]['longitude_deg']), 4) for c in codes],
+        'countries': {cc: countries.get(cc, cc) for cc in sorted({others[c]['iso_country'] for c in codes})},
+    }
+    path = OUT.parent / 'others.json'
+    path.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')))
+    print(f'Wrote {path.relative_to(HERE.parent)}: {len(codes)} airports without airline routes, {path.stat().st_size / 1e3:.0f} KB')
 
 
 if __name__ == '__main__':

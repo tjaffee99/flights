@@ -60,6 +60,11 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .code{display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:22px;padding:0 5px;box-sizing:border-box;border-radius:6px;background:var(--chip);color:var(--ink);font:600 12px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.02em;flex:none}
 .code.big{min-width:56px;height:34px;font-size:16px;border-radius:9px}
 .est{color:var(--ink3);font-weight:400}
+/* airports without airline flights: grey and italic */
+.row.other .t b,.dhead.other h2{font-style:italic;font-weight:500;color:var(--ink2)}
+.row.other .code,.dhead.other .code{font-style:italic;color:var(--ink3);background:none;box-shadow:inset 0 0 0 1px var(--sep)}
+.row.other .n small{color:var(--ink3);line-height:1.2}
+#tip i{color:var(--ink2)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;padding:2px 16px 4px}
 .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:14px;border:0;background:var(--chip);color:var(--ink);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap}
 .chip[aria-pressed="false"]{color:var(--ink3)}
@@ -70,7 +75,6 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .opts{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 16px 4px;font-size:12.5px;color:var(--ink2)}
 .legend{display:grid;grid-template-columns:44px 1fr;gap:7px 10px;align-items:center;padding:6px 16px 6px;font-size:12.5px;color:var(--ink2)}
 .legend i{display:block;width:44px;border-radius:4px;background:var(--route)}
-.legend i.dash{height:0!important;background:none;border-top:2px dashed var(--hot)}
 .legend i.hot{background:var(--hot)}
 .stats{display:flex;justify-content:space-between;gap:10px;padding:4px 16px 6px}
 .stats div{display:flex;flex-direction:column;min-width:0;white-space:nowrap}
