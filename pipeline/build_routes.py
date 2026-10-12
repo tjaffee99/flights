@@ -473,10 +473,28 @@ def main():
     if removed:
         print(f'Overrides removed {len(removed)} routes: {", ".join(sorted(removed)[:30])}')
 
-    write(routes, wiki, airports, countries, measured_sources, today)
+    write(routes, wiki, airports, countries, measured_sources, today, overrides)
 
 
-def write(routes, wiki, airports, countries, measured_sources, today):
+def wikipedia_titles():
+    """IATA code -> English Wikipedia title: the page actually fetched (redirects resolved), else
+    the best match from Wikidata and OurAirports."""
+    from fetch_wikipedia import wikipedia_titles as guess
+    titles = guess()
+    with open(BUILD / 'wiki_airports.csv', newline='') as f:
+        for row in csv.DictReader(f):
+            if row['title'] and int(row['tables'] or 0) + (1 if row['passengers'] else 0) > 0:
+                titles[row['iata']] = row['title']
+    return titles
+
+
+def wiki_column(codes, airports, titles):
+    """Each airport's Wikipedia title, or '' where it's the same as the airport's name."""
+    return ['' if titles.get(x, '') == airports[x]['name'] else titles.get(x, '-') for x in codes]
+
+
+def write(routes, wiki, airports, countries, measured_sources, today, overrides):
+    titles = wikipedia_titles()
     used = sorted({x for key in routes for x in key})
     index = {x: i for i, x in enumerate(used)}
     airline_names = sorted({a for k, p in wiki.items() if k in routes for a in p['airlines']})
@@ -525,12 +543,13 @@ def write(routes, wiki, airports, countries, measured_sources, today):
             'country': [airports[x]['cc'] for x in used],
             'lat': [round(airports[x]['lat'], 4) for x in used],
             'lon': [round(airports[x]['lon'], 4) for x in used],
+            'wiki': wiki_column(used, airports, titles),
         },
         'routes': out,
     }
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')))
-    write_others(set(used), countries)
+    write_others(set(used), countries, titles, overrides)
     total = sum(r['ab'] + r['ba'] for r in routes.values())
     share = {s: sum(r['ab'] + r['ba'] for r in routes.values() if r['source'] == s) / total
              for s in {r['source'] for r in routes.values()}}
@@ -539,7 +558,7 @@ def write(routes, wiki, airports, countries, measured_sources, today):
     print('  share of passengers by source: ' + ', '.join(f'{s} {100 * v:.0f}%' for s, v in sorted(share.items(), key=lambda kv: -kv[1])))
 
 
-def write_others(used, countries):
+def write_others(used, countries, titles, overrides):
     """../data/others.json: airports with a code but no airline routes (general aviation fields,
     air bases, closed or unfinished airports), which the map shows in grey."""
     others = {}
@@ -556,7 +575,9 @@ def write_others(used, countries):
         'country': [others[c]['iso_country'] for c in codes],
         'lat': [round(float(others[c]['latitude_deg']), 4) for c in codes],
         'lon': [round(float(others[c]['longitude_deg']), 4) for c in codes],
+        'wiki': ['' if titles.get(c, '') == others[c]['name'] else titles.get(c, '-') for c in codes],
         'countries': {cc: countries.get(cc, cc) for cc in sorted({others[c]['iso_country'] for c in codes})},
+        'closed': overrides['closed_countries'],
     }
     path = OUT.parent / 'others.json'
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')))

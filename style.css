@@ -73,9 +73,6 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .seg button{border:0;background:none;color:var(--ink2);font:inherit;font-size:12px;font-weight:500;padding:4px 9px;border-radius:6px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--panel-solid);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .opts{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 16px 4px;font-size:12.5px;color:var(--ink2)}
-.legend{display:grid;grid-template-columns:44px 1fr;gap:7px 10px;align-items:center;padding:6px 16px 6px;font-size:12.5px;color:var(--ink2)}
-.legend i{display:block;width:44px;border-radius:4px;background:var(--route)}
-.legend i.hot{background:var(--hot)}
 .stats{display:flex;justify-content:space-between;gap:10px;padding:4px 16px 6px}
 .stats div{display:flex;flex-direction:column;min-width:0;white-space:nowrap}
 .stats b{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
@@ -97,6 +94,13 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .kv dd{margin:0;font-variant-numeric:tabular-nums}
 .airlines{padding:2px 16px 8px;font-size:13.5px;line-height:1.5}
 .dhead h2,.dhead .sub,.row .t b,.row .t span{unicode-bidi:plaintext;text-align:left}
+.dhead h2 a.wiki{color:inherit;text-decoration:none}
+.dhead h2 a.wiki svg{display:inline-block;width:.62em;height:.62em;margin-left:.3em;vertical-align:.08em;color:var(--ink3)}
+.dhead h2 a.wiki:hover{text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:1.5px;text-underline-offset:.15em}
+.dhead h2 a.wiki:hover svg{color:var(--accent)}
+.dhead h2 a.wiki:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+#lines[aria-pressed="false"]{color:var(--ink3)}
+#lines[aria-pressed="false"] svg{opacity:.5}
 
 /* ---------- map controls ---------- */
 .ctl{position:absolute;right:16px;top:calc(16px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:10px;z-index:4}

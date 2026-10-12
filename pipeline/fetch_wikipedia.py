@@ -42,7 +42,12 @@ def title_from_url(url):
 
 
 def airports_to_fetch():
-    """Every scheduled-service airport with an IATA code, with its English Wikipedia title.
+    """Every scheduled-service airport with an IATA code, with its English Wikipedia title."""
+    return wikipedia_titles(scheduled_only=True)
+
+
+def wikipedia_titles(scheduled_only=False):
+    """IATA code -> English Wikipedia title, for every airport (or only those with scheduled service).
 
     Wikidata's sitelink is preferred because OurAirports' links are often redirects or, now and
     then, disambiguation pages. When several Wikidata items share an IATA code, the ICAO code
@@ -60,7 +65,9 @@ def airports_to_fetch():
     with open(CACHE / 'airports.csv', newline='') as f:
         for row in csv.DictReader(f):
             iata = row['iata_code'].strip()
-            if row['scheduled_service'] != 'yes' or not iata or row['type'] == 'closed':
+            if not iata or row['type'] == 'closed' or iata in out:
+                continue
+            if scheduled_only and row['scheduled_service'] != 'yes':
                 continue
             linked = title_from_url(row['wikipedia_link'])
             candidates = [t for _, t in wikidata.get(iata, [])]

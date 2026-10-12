@@ -1,8 +1,9 @@
 # Flight Atlas
 
 Every passenger air route flying today on a globe, with each line's width set by how many people
-fly the route in a year. Click an airport to see all its nonstop routes ranked by passengers, and
-click a route for its numbers, airlines and source.
+fly the route in a year. Click an airport to see all its nonstop routes ranked by passengers (its
+name links to its Wikipedia article), and click a route for its numbers, airlines and source. The
+route lines can be switched off, and zooming in shows the streets around each airport.
 
 It's a static site (`index.html`, `app.js`, `style.css`, MapLibre GL in `vendor/`) that reads
 `data/flights.json` (and `data/others.json` after the map appears), both built by the scripts in

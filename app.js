@@ -15,7 +15,7 @@ function unpack(d) {
   const a = d.airports, n = a.code.length;
   const air = Array.from({ length: n }, (_, i) => ({
     i, code: a.code[i], name: a.name[i], city: a.city[i], town: a.town ? a.town[i] : '', cc: a.country[i],
-    lat: a.lat[i], lon: a.lon[i], pax: 0, routes: [], other: false,
+    lat: a.lat[i], lon: a.lon[i], pax: 0, routes: [], other: false, wiki: wikiTitle(a.wiki && a.wiki[i], a.name[i]),
   }));
   const r = d.routes;
   const routes = r.a.map((ai, i) => {
@@ -33,6 +33,10 @@ function unpack(d) {
   for (const x of air) x.routes.sort((p, q) => routes[q].pax - routes[p].pax);
   return [air, routes];
 }
+
+// the data gives an airport's Wikipedia title only where it differs from its name; '-' means it has none
+const wikiTitle = (t, name) => (t === '-' ? null : t || name);
+const wikiUrl = x => x.wiki ? 'https://en.wikipedia.org/wiki/' + encodeURIComponent(x.wiki.replace(/ /g, '_')) : null;
 
 function distance(x, y) {
   const s = Math.sin((y.lat - x.lat) * RAD / 2) ** 2 +
@@ -90,10 +94,14 @@ function isDark() {
   return matchMedia('(prefers-color-scheme: dark)').matches;
 }
 const PAL = {
-  light: { land:'#F2F0EB', water:'#D9E4EA', bnd:'#C3BCB1', label:'#8E8A84', halo:'#F2F0EB', space:'#E9E7E1',
+  light: { land:'#F2F0EB', water:'#D9E4EA', waterLine:'#C9D9E3', urban:'#EAE7E0', park:'#DDE8D3', wood:'#E1EAD8', sand:'#EEE8D8', ice:'#FBFBFD',
+           airport:'#E5E3EA', apron:'#DAD7E0', runway:'#C9C4BB', road:'#FFFFFF', roadCase:'#D9D4CA', minor:'#FBFAF7', building:'#E3DFD7', buildingEdge:'#D6D1C7',
+           bnd:'#B0A99E', bnd4:'#CFC9BF', label:'#6C6C72', city:'#3A3A3C', town:'#6C6C72', halo:'#F2F0EB', space:'#E9E7E1',
            horizon:'#FFFFFF', route:'#2E4FA8', routeOp:.26, faded:'#8E8A84', fadedOp:.07, hot:'#E0542E',
            dot:'#1C1C1E', dotEdge:'#FFFFFF', text:'#1C1C1E', muted:'#7E7E85' },
-  dark:  { land:'#2A2C30', water:'#1A1C20', bnd:'#4A4D53', label:'#7C7E84', halo:'#1A1C20', space:'#0E0F11',
+  dark:  { land:'#2A2C30', water:'#1A1C20', waterLine:'#22252A', urban:'#2F3135', park:'#263027', wood:'#252D26', sand:'#2E2C27', ice:'#33363C',
+           airport:'#33333B', apron:'#3A3A43', runway:'#4C4F56', road:'#3D4046', roadCase:'#2C2E32', minor:'#36393E', building:'#34363B', buildingEdge:'#3C3F44',
+           bnd:'#6E7177', bnd4:'#46494E', label:'#9A9CA2', city:'#E9E9EE', town:'#A1A1A8', halo:'#1A1C20', space:'#0E0F11',
            horizon:'#3A4352', route:'#7FB2FF', routeOp:.26, faded:'#8A8C92', fadedOp:.06, hot:'#FF9F5A',
            dot:'#F2F2F7', dotEdge:'#1A1C20', text:'#F2F2F7', muted:'#94969C' },
 };
@@ -105,17 +113,152 @@ const FONT_BOLD = ['Noto Sans Bold'];
 const FONT_ITALIC = ['Noto Sans Italic'];
 const EMPTY = { type: 'FeatureCollection', features: [] };
 
-// line width in pixels: the square root of passengers, so a 10M route is ~3x a 1M one, not 10x
+// line width in pixels: the square root of passengers, so a 10M route is ~3x a 1M one, not 10x.
+// Past zoom 6 lines get narrower again and (below) fainter, so the streets and the airport show through.
 const W = ['sqrt', ['/', ['get', 'p'], 1e6]];
 const lineWidth = (k = 1, min = 0, add = 0) => ['interpolate', ['exponential', 1.6], ['zoom'],
-  0, ['+', add, ['max', 0.25 + min, ['*', 1.1 * k, W]]],
-  3, ['+', add, ['max', 0.35 + min, ['*', 2 * k, W]]],
-  6, ['+', add, ['max', 0.7 + min, ['*', 4.5 * k, W]]],
-  10, ['+', add, ['max', 1.2 + min, ['*', 10 * k, W]]]];
+  0, ['+', add, ['min', 10, ['max', 0.25 + min, ['*', 1.1 * k, W]]]],
+  3, ['+', add, ['min', 16, ['max', 0.35 + min, ['*', 2 * k, W]]]],
+  6, ['+', add, ['min', 20, ['max', 0.7 + min, ['*', 3.6 * k, W]]]],
+  10, ['+', add * 0.6, ['min', 12, ['max', 0.7 + min * 0.6, ['*', 2.2 * k, W]]]],
+  14, ['+', add * 0.4, ['min', 8, ['max', 0.6 + min * 0.4, ['*', 1.4 * k, W]]]]];
+const routeOpacity = op => ['interpolate', ['linear'], ['zoom'], 5, op, 9, op * 0.55, 13, op * 0.35];
+const focusOpacity = op => ['interpolate', ['linear'], ['zoom'], 7, op, 11, op * 0.6, 14, op * 0.4];
 const dotRadius = (add = 0) => ['interpolate', ['linear'], ['zoom'],
   0, ['+', 0.8 + add, ['*', 0.45, ['sqrt', ['/', ['get', 'p'], 1e6]]]],
   4, ['+', 1.6 + add, ['*', 0.9, ['sqrt', ['/', ['get', 'p'], 1e6]]]],
   8, ['+', 3 + add, ['*', 1.6, ['sqrt', ['/', ['get', 'p'], 1e6]]]]];
+// an airport's code, and from zoom 9 its name under it
+const airportText = (font) => ['step', ['zoom'], ['get', 'code'],
+  9, ['format', ['get', 'code'], {}, '\n', {}, ['get', 'name'], { 'font-scale': 0.82, 'text-font': ['literal', font] }]];
+
+const cls = (...c) => ['match', ['get', 'class'], c, true, false];
+const NAME = ['coalesce', ['get', 'name:en'], ['get', 'name_en'], ['get', 'name']];
+const omt = { source: 'omt' };
+
+// the base map: muted at globe scale; streets, airport grounds and buildings appear as you zoom in
+function baseLayers(p) {
+  // road widths by class, plus `edge` pixels for the outline (one zoom curve per expression)
+  const roadW = (edge = 0) => ['interpolate', ['exponential', 1.5], ['zoom'],
+    5, ['match', ['get', 'class'], 'motorway', 0.7, 'trunk', 0.5, 0.3],
+    10, ['+', edge * 0.6, ['match', ['get', 'class'], 'motorway', 2.4, 'trunk', 2, 'primary', 1.6, 'secondary', 1.2, 'tertiary', 1, 0.6]],
+    16, ['+', edge, ['match', ['get', 'class'], 'motorway', 14, 'trunk', 12, 'primary', 11, 'secondary', 10, 'tertiary', 9, 'minor', 7, 4]]];
+  const roads = ['all', ['==', ['geometry-type'], 'LineString'], ['!=', ['get', 'brunnel'], 'tunnel'],
+    ['match', ['get', 'class'], ['motorway', 'trunk'], true, 'primary', ['>=', ['zoom'], 7], 'secondary', ['>=', ['zoom'], 9],
+      'tertiary', ['>=', ['zoom'], 10], 'minor', ['>=', ['zoom'], 12], 'service', ['>=', ['zoom'], 14], false]];
+  return [
+    { id: 'land', type: 'background', paint: { 'background-color': p.land } },
+    { ...omt, id: 'landcover', type: 'fill', 'source-layer': 'landcover', minzoom: 5, filter: cls('wood', 'forest', 'grass', 'wetland', 'sand', 'ice', 'glacier'),
+      paint: { 'fill-color': ['match', ['get', 'class'], ['wood', 'forest'], p.wood, 'sand', p.sand, ['ice', 'glacier'], p.ice, p.park],
+               'fill-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0, 7, 0.6, 12, 0.9] } },
+    { ...omt, id: 'landuse', type: 'fill', 'source-layer': 'landuse', minzoom: 6, filter: cls('residential', 'suburb', 'neighbourhood', 'commercial', 'industrial', 'retail'),
+      paint: { 'fill-color': p.urban, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 8, 1] } },
+    { ...omt, id: 'park', type: 'fill', 'source-layer': 'park', minzoom: 6,
+      paint: { 'fill-color': p.park, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 9, 0.8] } },
+    { ...omt, id: 'water', type: 'fill', 'source-layer': 'water', filter: ['!=', ['get', 'brunnel'], 'tunnel'], paint: { 'fill-color': p.water } },
+    { ...omt, id: 'waterway', type: 'line', 'source-layer': 'waterway', minzoom: 8, filter: ['any', cls('river', 'canal'), ['>=', ['zoom'], 13]],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': p.waterLine, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 14, 3, 18, 10] } },
+    // airport grounds, aprons and runways
+    { ...omt, id: 'aeroway-area', type: 'fill', 'source-layer': 'aeroway', minzoom: 9, filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'fill-color': ['match', ['get', 'class'], ['apron', 'runway', 'taxiway'], p.apron, p.airport],
+               'fill-opacity': ['interpolate', ['linear'], ['zoom'], 9, 0, 10, 1] } },
+    { ...omt, id: 'aeroway-line', type: 'line', 'source-layer': 'aeroway', minzoom: 10,
+      filter: ['all', ['==', ['geometry-type'], 'LineString'], cls('runway', 'taxiway')],
+      paint: { 'line-color': p.runway, 'line-width': ['interpolate', ['exponential', 1.5], ['zoom'],
+        10, ['match', ['get', 'class'], 'runway', 1.2, 0.3], 16, ['match', ['get', 'class'], 'runway', 30, 8]] } },
+    { ...omt, id: 'building', type: 'fill', 'source-layer': 'building', minzoom: 13,
+      paint: { 'fill-color': p.building, 'fill-outline-color': p.buildingEdge, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 14, 1] } },
+    { ...omt, id: 'road-case', type: 'line', 'source-layer': 'transportation', minzoom: 9, filter: roads,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': p.roadCase, 'line-width': roadW(2.5) } },
+    { ...omt, id: 'road', type: 'line', 'source-layer': 'transportation', minzoom: 5, filter: roads,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': ['match', ['get', 'class'], ['minor', 'service'], p.minor, p.road], 'line-width': roadW(),
+               'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.6, 8, 1] } },
+    { ...omt, id: 'rail', type: 'line', 'source-layer': 'transportation', minzoom: 11,
+      filter: ['all', cls('rail'), ['!=', ['get', 'brunnel'], 'tunnel']],
+      paint: { 'line-color': p.runway, 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.6, 16, 2] } },
+    { ...omt, id: 'bnd4', type: 'line', 'source-layer': 'boundary', minzoom: 4,
+      filter: ['all', ['==', ['get', 'admin_level'], 4], ['!=', ['get', 'maritime'], 1]],
+      paint: { 'line-color': p.bnd4, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.5, 10, 1.2], 'line-dasharray': [3, 2] } },
+  ];
+}
+
+// borders and place names go above the route lines, or the busiest parts of the world would hide them
+function overLayers(p) {
+  const halo = { 'text-halo-color': p.halo, 'text-halo-width': 1.4 };
+  const place = (id, classes, minzoom, size, color, font = FONT) => ({ ...omt, id, type: 'symbol', 'source-layer': 'place', minzoom,
+    filter: cls(...classes),
+    layout: { 'text-field': NAME, 'text-font': font, 'text-size': size, 'text-max-width': 8, 'symbol-sort-key': ['get', 'rank'], 'text-padding': 3 },
+    paint: { 'text-color': color, ...halo } });
+  return [
+    { ...omt, id: 'boundary', type: 'line', 'source-layer': 'boundary',
+      filter: ['all', ['==', ['get', 'admin_level'], 2], ['!=', ['get', 'maritime'], 1]],
+      layout: { 'line-join': 'round' },
+      paint: { 'line-color': p.bnd, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.5, 6, 1.1, 12, 2] } },
+    { ...omt, id: 'road-label', type: 'symbol', 'source-layer': 'transportation_name', minzoom: 13,
+      filter: cls('motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor'),
+      layout: { 'symbol-placement': 'line', 'text-field': NAME, 'text-font': FONT, 'text-size': 11, 'text-padding': 4 },
+      paint: { 'text-color': p.town, ...halo } },
+    place('place-suburb', ['suburb', 'neighbourhood', 'quarter'], 12, 11, p.town),
+    place('place-village', ['village'], 11, 11, p.town),
+    place('place-town', ['town'], 8, ['interpolate', ['linear'], ['zoom'], 8, 11, 14, 14], p.town),
+    place('place-city', ['city'], 4.5, ['interpolate', ['linear'], ['zoom'], 4.5, 11, 10, 16], p.city),
+  ];
+}
+
+// Every route sits in one big source that is never filtered or restyled per feature after load:
+// selecting or hovering copies the few routes involved into small sources drawn on top, so the
+// map never has to rebuild the 34,000-route layer.
+function flightLayers(p) {
+  return [
+    { id: 'routes', type: 'line', source: 'routes', layout: { 'line-sort-key': ['get', 'p'] },
+      paint: { 'line-color': p.route, 'line-opacity': routeOpacity(p.routeOp), 'line-width': lineWidth() } },
+    ...overLayers(p),
+    // airports without airline routes: small grey dots, grey italic codes
+    { id: 'others', type: 'circle', source: 'others', minzoom: 3.5,
+      paint: { 'circle-color': p.muted, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 3.5, 1.2, 8, 3, 14, 5],
+               'circle-opacity': 0.7, 'circle-pitch-alignment': 'map' } },
+    { id: 'others-label', type: 'symbol', source: 'others', minzoom: 5,
+      layout: { 'text-field': airportText(FONT_ITALIC), 'text-font': FONT_ITALIC, 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 9, 12],
+                'text-offset': [0, 0.8], 'text-anchor': 'top', 'text-padding': 4, 'text-max-width': 9 },
+      paint: { 'text-color': p.muted, 'text-halo-color': p.halo, 'text-halo-width': 1.6, 'text-opacity': 0.9 } },
+    { id: 'airports', type: 'circle', source: 'airports', layout: { 'circle-sort-key': ['get', 'p'] },
+      paint: { 'circle-color': p.dot, 'circle-radius': dotRadius(), 'circle-stroke-color': p.dotEdge,
+               'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 0, 0.3, 5, 1],
+               'circle-opacity': 0.85, 'circle-stroke-opacity': 0.85, 'circle-pitch-alignment': 'map' } },
+    { id: 'airport-label', type: 'symbol', source: 'airports', minzoom: 3,
+      layout: { 'text-field': airportText(FONT), 'text-font': FONT_BOLD, 'text-size': ['interpolate', ['linear'], ['zoom'], 2, 10, 7, 13],
+                'text-offset': [0, 0.9], 'text-anchor': 'top', 'symbol-sort-key': ['-', ['get', 'p']], 'text-padding': 6, 'text-max-width': 9 },
+      paint: { 'text-color': p.text, 'text-halo-color': p.halo, 'text-halo-width': 1.4, 'text-opacity': 0.85 } },
+    // countries are placed before airport codes, so a crowd of codes can't push a country's name off the map
+    { ...omt, id: 'country-label', type: 'symbol', 'source-layer': 'place', minzoom: 1.5, maxzoom: 9, filter: cls('country'),
+      layout: { 'text-field': NAME, 'text-font': FONT_BOLD, 'text-transform': 'uppercase', 'text-letter-spacing': 0.08, 'text-max-width': 7,
+                'text-size': ['interpolate', ['linear'], ['zoom'], 1.5, ['match', ['get', 'rank'], [1, 2], 10, 9], 6, ['match', ['get', 'rank'], [1, 2], 15, 13]],
+                'symbol-sort-key': ['get', 'rank'], 'text-padding': 2 },
+      paint: { 'text-color': p.label, 'text-halo-color': p.halo, 'text-halo-width': 1.6,
+               'text-opacity': ['interpolate', ['linear'], ['zoom'], 7, 1, 9, 0] } },
+    // the selected airport's routes, outlined so they stand clear of everything else
+    { id: 'focus-halo', type: 'line', source: 'focus', layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
+      paint: { 'line-color': p.halo, 'line-opacity': focusOpacity(0.9), 'line-width': lineWidth(2.2, 1, 2.5) } },
+    { id: 'focus', type: 'line', source: 'focus', layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
+      paint: { 'line-color': p.hot, 'line-opacity': focusOpacity(1), 'line-width': lineWidth(2.2, 1) } },
+    { id: 'hover', type: 'line', source: 'hover', layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': p.text, 'line-opacity': 0.95, 'line-width': lineWidth(2.2, 1.6) } },
+    { id: 'focus-dots', type: 'circle', source: 'focus-airports', filter: ['!=', ['get', 'sel'], 1],
+      paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 5, 3.5, 9, 5.5],
+               'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 1.2, 'circle-pitch-alignment': 'map' } },
+    { id: 'focus-sel', type: 'circle', source: 'focus-airports', filter: ['==', ['get', 'sel'], 1],
+      paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4.5, 5, 7.5, 9, 10],
+               'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 2.5, 'circle-pitch-alignment': 'map' } },
+    { id: 'focus-label', type: 'symbol', source: 'focus-airports',
+      layout: { 'text-field': airportText(FONT), 'text-font': FONT_BOLD, 'text-size': ['case', ['==', ['get', 'sel'], 1], 14, 12],
+                'text-offset': [0, 0.9], 'text-anchor': 'top', 'symbol-sort-key': ['-', ['get', 'p']], 'text-padding': 2, 'text-max-width': 9 },
+      paint: { 'text-color': p.hot, 'text-halo-color': p.halo, 'text-halo-width': 1.8 } },
+  ];
+}
+const LINE_LAYERS = ['routes', 'focus-halo', 'focus', 'hover'];
 
 function baseStyle(p) {
   return {
@@ -125,26 +268,10 @@ function baseStyle(p) {
     sky: { 'sky-color': p.space, 'horizon-color': p.horizon, 'fog-color': p.space, 'sky-horizon-blend': 0.6,
            'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.9, 'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0] },
     sources: { omt: { type: 'vector', url: OFM + '/planet' } },
-    layers: [
-      { id: 'land', type: 'background', paint: { 'background-color': p.land } },
-      { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', filter: ['!=', ['get', 'brunnel'], 'tunnel'],
-        paint: { 'fill-color': p.water } },
-      { id: 'boundary', type: 'line', source: 'omt', 'source-layer': 'boundary',
-        filter: ['all', ['==', ['get', 'admin_level'], 2], ['!=', ['get', 'maritime'], 1]],
-        paint: { 'line-color': p.bnd, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 6, 1] } },
-      { id: 'country-label', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 2.5,
-        filter: ['==', ['get', 'class'], 'country'],
-        layout: { 'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']], 'text-font': FONT,
-                  'text-size': ['interpolate', ['linear'], ['zoom'], 2, 10, 6, 13], 'text-transform': 'uppercase',
-                  'text-letter-spacing': 0.08, 'text-max-width': 7 },
-        paint: { 'text-color': p.label, 'text-halo-color': p.halo, 'text-halo-width': 1 } },
-    ],
+    layers: baseLayers(p),
   };
 }
 
-// Every route sits in one big source that is never filtered or restyled per feature after load:
-// selecting or hovering copies the few routes involved into small sources drawn on top, so the
-// map never has to rebuild the 34,000-route layer.
 function addFlightLayers(p) {
   map.addSource('routes', { type: 'geojson', data: routeGeo, buffer: 2, tolerance: 0.4, maxzoom: 6 });
   map.addSource('airports', { type: 'geojson', data: airportGeo, maxzoom: 10 });
@@ -152,68 +279,17 @@ function addFlightLayers(p) {
   map.addSource('focus', { type: 'geojson', data: EMPTY, maxzoom: 8 });
   map.addSource('focus-airports', { type: 'geojson', data: EMPTY, maxzoom: 10 });
   map.addSource('hover', { type: 'geojson', data: EMPTY, maxzoom: 8 });
-  map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-sort-key': ['get', 'p'] },
-    paint: { 'line-color': p.route, 'line-opacity': p.routeOp, 'line-width': lineWidth() } });
-  // airports without airline routes: small grey dots, grey italic codes
-  map.addLayer({ id: 'others', type: 'circle', source: 'others', minzoom: 3.5,
-    paint: { 'circle-color': p.muted, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 3.5, 1.2, 8, 3],
-             'circle-opacity': 0.7, 'circle-pitch-alignment': 'map' } });
-  map.addLayer({ id: 'others-label', type: 'symbol', source: 'others', minzoom: 5,
-    layout: { 'text-field': ['get', 'code'], 'text-font': FONT_ITALIC, 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 9, 12],
-              'text-offset': [0, 0.8], 'text-anchor': 'top', 'text-padding': 4 },
-    paint: { 'text-color': p.muted, 'text-halo-color': p.halo, 'text-halo-width': 1.6, 'text-opacity': 0.9 } });
-  map.addLayer({ id: 'airports', type: 'circle', source: 'airports',
-    layout: { 'circle-sort-key': ['get', 'p'] },
-    paint: { 'circle-color': p.dot, 'circle-radius': dotRadius(), 'circle-stroke-color': p.dotEdge,
-             'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 0, 0.3, 5, 1],
-             'circle-opacity': 0.85, 'circle-stroke-opacity': 0.85, 'circle-pitch-alignment': 'map' } });
-  map.addLayer({ id: 'airport-label', type: 'symbol', source: 'airports', minzoom: 3,
-    layout: { 'text-field': ['get', 'code'], 'text-font': FONT_BOLD, 'text-size': ['interpolate', ['linear'], ['zoom'], 2, 10, 7, 13],
-              'text-offset': [0, 0.9], 'text-anchor': 'top', 'symbol-sort-key': ['-', ['get', 'p']], 'text-padding': 6 },
-    paint: { 'text-color': p.text, 'text-halo-color': p.halo, 'text-halo-width': 1.4, 'text-opacity': 0.85 } });
-  // the selected airport's routes, outlined so they stand clear of everything else
-  map.addLayer({ id: 'focus-halo', type: 'line', source: 'focus',
-    layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
-    paint: { 'line-color': p.halo, 'line-opacity': 0.9, 'line-width': lineWidth(2.2, 1, 2.5) } });
-  map.addLayer({ id: 'focus', type: 'line', source: 'focus',
-    layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'p'] },
-    paint: { 'line-color': p.hot, 'line-opacity': 1, 'line-width': lineWidth(2.2, 1) } });
-  map.addLayer({ id: 'hover', type: 'line', source: 'hover', layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': p.text, 'line-opacity': 0.95, 'line-width': lineWidth(2.2, 1.6) } });
-  map.addLayer({ id: 'focus-dots', type: 'circle', source: 'focus-airports', filter: ['!=', ['get', 'sel'], 1],
-    paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 5, 3.5, 9, 5.5],
-             'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 1.2, 'circle-pitch-alignment': 'map' } });
-  map.addLayer({ id: 'focus-sel', type: 'circle', source: 'focus-airports', filter: ['==', ['get', 'sel'], 1],
-    paint: { 'circle-color': p.hot, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4.5, 5, 7.5, 9, 10],
-             'circle-stroke-color': p.dotEdge, 'circle-stroke-width': 2.5, 'circle-pitch-alignment': 'map' } });
-  map.addLayer({ id: 'focus-label', type: 'symbol', source: 'focus-airports',
-    layout: { 'text-field': ['get', 'code'], 'text-font': FONT_BOLD, 'text-size': ['case', ['==', ['get', 'sel'], 1], 14, 12],
-              'text-offset': [0, 0.9], 'text-anchor': 'top', 'symbol-sort-key': ['-', ['get', 'p']], 'text-padding': 2 },
-    paint: { 'text-color': p.hot, 'text-halo-color': p.halo, 'text-halo-width': 1.8 } });
+  for (const layer of flightLayers(p)) map.addLayer(layer);
+  showLines();
 }
 
+// a theme change restyles every layer in place (paint only), then reapplies the selection's fading
 function applyTheme() {
   const p = pal();
   map.setSky(baseStyle(p).sky);
-  map.setPaintProperty('land', 'background-color', p.land);
-  map.setPaintProperty('water', 'fill-color', p.water);
-  map.setPaintProperty('boundary', 'line-color', p.bnd);
-  map.setPaintProperty('country-label', 'text-color', p.label);
-  map.setPaintProperty('country-label', 'text-halo-color', p.halo);
-  map.setPaintProperty('focus-halo', 'line-color', p.halo);
-  map.setPaintProperty('focus', 'line-color', p.hot);
-  map.setPaintProperty('hover', 'line-color', p.text);
-  for (const id of ['focus-dots', 'focus-sel']) {
-    map.setPaintProperty(id, 'circle-color', p.hot);
-    map.setPaintProperty(id, 'circle-stroke-color', p.dotEdge);
+  for (const layer of [...baseLayers(p), ...flightLayers(p)]) {
+    for (const [key, value] of Object.entries(layer.paint || {})) map.setPaintProperty(layer.id, key, value);
   }
-  map.setPaintProperty('airports', 'circle-color', p.dot);
-  map.setPaintProperty('airports', 'circle-stroke-color', p.dotEdge);
-  map.setPaintProperty('others', 'circle-color', p.muted);
-  map.setPaintProperty('others-label', 'text-color', p.muted);
-  for (const id of ['airport-label', 'focus-label', 'others-label']) map.setPaintProperty(id, 'text-halo-color', p.halo);
-  map.setPaintProperty('airport-label', 'text-color', p.text);
-  map.setPaintProperty('focus-label', 'text-color', p.hot);
   showSelection();
 }
 
@@ -238,7 +314,7 @@ function buildGeo() {
 }
 const point = (x, sel = false) => ({
   type: 'Feature',
-  properties: { i: x.i, code: x.code, p: x.pax, sel: sel ? 1 : 0 },
+  properties: { i: x.i, code: x.code, name: x.name, p: x.pax, sel: sel ? 1 : 0 },
   geometry: { type: 'Point', coordinates: [x.lon, x.lat] },
 });
 const collection = features => ({ type: 'FeatureCollection', features });
@@ -251,6 +327,7 @@ const S = {
   hover: null,     // hovered route index
   min: 0,          // overview: minimum passengers per route
   dom: true, intl: true,
+  lines: (() => { try { return localStorage.getItem('flights.lines') !== 'off'; } catch (_) { return true; } })(),
   q: '',
 };
 
@@ -275,12 +352,21 @@ function showSelection() {
   map.getSource('focus-airports').setData(collection([...spots.values()].map(x => point(x, x.i === sel))));
   // everything else fades to grey (constant paint values: no re-layout)
   map.setPaintProperty('routes', 'line-color', on ? p.faded : p.route);
-  map.setPaintProperty('routes', 'line-opacity', on ? p.fadedOp : p.routeOp);
+  map.setPaintProperty('routes', 'line-opacity', routeOpacity(on ? p.fadedOp : p.routeOp));
   map.setPaintProperty('airports', 'circle-opacity', on ? 0.15 : 0.85);
   map.setPaintProperty('airports', 'circle-stroke-opacity', on ? 0.15 : 0.85);
   map.setPaintProperty('airport-label', 'text-opacity', on ? 0 : 0.85);
   map.setPaintProperty('others', 'circle-opacity', on ? 0.25 : 0.7);
   map.setPaintProperty('others-label', 'text-opacity', on ? 0.4 : 0.9);
+}
+
+// the route lines can be switched off to see the map underneath; the choice is remembered
+function showLines() {
+  for (const id of LINE_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', S.lines ? 'visible' : 'none');
+  const b = $('#lines');
+  b.setAttribute('aria-pressed', String(S.lines));
+  b.setAttribute('aria-label', S.lines ? 'Hide flight paths' : 'Show flight paths');
+  b.title = S.lines ? 'Hide flight paths' : 'Show flight paths';
 }
 
 // only the overview's route filters touch the big layer, and only when they change
@@ -337,15 +423,12 @@ function overview() {
   const topRoutes = R.slice(0, 12);   // the file lists routes busiest first
   const topAirports = A.filter(x => x.routes.length).sort((p, q) => q.pax - p.pax).slice(0, 12);
   const seg = (vals) => vals.map(([v, label]) => `<button data-min="${v}" aria-pressed="${S.min === v}">${label}</button>`).join('');
-  const legend = [[1e5, '100K passengers a year'], [1e6, '1 million'], [1e7, '10 million']].map(([v, label]) =>
-    `<i style="height:${Math.max(1, 2 * Math.sqrt(v / 1e6)).toFixed(1)}px"></i><span>${label}</span>`).join('');
   return `<div class="intro"><h1>Flight Atlas</h1>
     <p>Every passenger air route flying today, drawn by how many people fly it in a year. Click an airport to see everywhere it flies nonstop.</p></div>
   <div class="stats"><div><b>${fmtInt(R.length)}</b><span>routes</span></div><div><b>${fmtInt(live)}</b><span>airports</span></div>
     <div><b>${(total / 1e9).toFixed(2)}B</b><span>passengers a year</span></div></div>
   <div class="opts"><span>Show routes</span><span class="seg" id="minseg">${seg([[0, 'All'], [1e5, '100K+'], [1e6, '1M+']])}</span></div>
   <div class="chips"><button class="chip" id="cdom" aria-pressed="${S.dom}">Domestic</button><button class="chip" id="cintl" aria-pressed="${S.intl}">International</button></div>
-  <div class="legend">${legend}<i class="hot" style="height:3px"></i><span>Selected airport’s routes</span></div>
   <div class="sec">Busiest airports</div>${topAirports.map(airportRow).join('')}
   <div class="sec">Busiest routes</div>${topRoutes.map(r => routeRow(r, null, topRoutes[0].pax)).join('')}
   <div class="note small">Routes are the ones airlines fly as of ${esc(D.routes_as_of)}, from Wikipedia's airport pages.
@@ -353,16 +436,24 @@ function overview() {
     the rest are estimates fitted to each airport’s annual total. <a href="${esc(D.about)}" target="_blank" rel="noopener">How this was made</a></div>`;
 }
 
+const WIKI = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2.5H2.5v7h7V7M7 2.5h2.5V5M9.5 2.5 5.5 6.5"/></svg>';
+// an airport's name, linking to its Wikipedia article when it has one
+function airportTitle(x) {
+  const url = wikiUrl(x);
+  return url ? `<a class="wiki" href="${esc(url)}" target="_blank" rel="noopener" title="Open on Wikipedia">${esc(x.name)}${WIKI}</a>` : esc(x.name);
+}
+
 function airportView(x) {
   if (x.other) return `<button class="back" data-back>${BACK}All routes</button>
-  <div class="dhead other"><span class="code big">${esc(x.code)}</span><div><h2>${esc(x.name)}</h2><div class="sub">${esc(place(x))}</div></div></div>
-  <div class="note">No scheduled airline flights. Airports like this one serve private planes, air taxis, the military, or have closed or not yet opened.</div>`;
+  <div class="dhead other"><span class="code big">${esc(x.code)}</span><div><h2>${airportTitle(x)}</h2><div class="sub">${esc(place(x))}</div></div></div>
+  <div class="note">No scheduled airline flights. ${esc((D.closed && D.closed[x.cc]) ||
+    'Airports like this one serve private planes, air taxis, the military, or have closed or not yet opened.')}</div>`;
   const routes = x.routes.map(i => R[i]);
   const countries = new Set(routes.map(r => A[r.a === x.i ? r.b : r.a].cc));
   const est = routes.filter(isEst).reduce((s, r) => s + r.pax, 0);
   const top = routes.length ? routes[0].pax : 1;
   return `<button class="back" data-back>${BACK}All routes</button>
-  <div class="dhead"><span class="code big">${esc(x.code)}</span><div><h2>${esc(x.name)}</h2><div class="sub">${esc(place(x))}</div></div></div>
+  <div class="dhead"><span class="code big">${esc(x.code)}</span><div><h2>${airportTitle(x)}</h2><div class="sub">${esc(place(x))}</div></div></div>
   <div class="stats"><div><b>${(est > x.pax / 2 ? '≈ ' : '') + fmtPax(x.pax)}</b><span>passengers a year</span></div>
     <div><b>${routes.length}</b><span>nonstop destinations</span></div><div><b>${countries.size}</b><span>countries</span></div></div>
   <div class="sec">Destinations by passengers</div>
@@ -499,6 +590,11 @@ $('#q').addEventListener('keydown', e => {
 });
 $('#qclear').addEventListener('click', () => { $('#q').value = ''; S.q = ''; $('#qclear').classList.remove('show'); render(); $('#q').focus(); });
 $('#grip').addEventListener('click', () => $('#panel').classList.toggle('min'));
+$('#lines').addEventListener('click', () => {
+  S.lines = !S.lines;
+  try { localStorage.setItem('flights.lines', S.lines ? 'on' : 'off'); } catch (_) {}
+  if (map) showLines();
+});
 $('#zin').addEventListener('click', () => map.zoomIn());
 $('#zout').addEventListener('click', () => map.zoomOut());
 $('#home').addEventListener('click', () => map.easeTo({ ...HOME(), duration: 900 }));
@@ -561,9 +657,10 @@ function hoverAt(point) {
 function loadOthers() {
   fetch('data/others.json').then(r => r.json()).then(o => {
     Object.assign(D.countries, o.countries);
+    D.closed = o.closed || {};
     const features = o.code.map((code, k) => {
       const x = { i: A.length, code, name: o.name[k], city: o.city[k], town: '', cc: o.country[k],
-                  lat: o.lat[k], lon: o.lon[k], pax: 0, routes: [], other: true };
+                  lat: o.lat[k], lon: o.lon[k], pax: 0, routes: [], other: true, wiki: wikiTitle(o.wiki && o.wiki[k], o.name[k]) };
       A.push(x);
       return point(x);
     });
@@ -577,7 +674,7 @@ function loadOthers() {
 
 function initMap() {
   map = new maplibregl.Map({
-    container: 'map', style: baseStyle(pal()), center: HOME().center, zoom: HOME().zoom, minZoom: 0, maxZoom: 10,
+    container: 'map', style: baseStyle(pal()), center: HOME().center, zoom: HOME().zoom, minZoom: 0, maxZoom: 16,
     attributionControl: false, dragRotate: false, pitchWithRotate: false, renderWorldCopies: true,
   });
   map.touchZoomRotate.disableRotation();
