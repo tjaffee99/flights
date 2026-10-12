@@ -1,0 +1,10 @@
+{
+  "_comment": "Hard rules applied after everything else, for flights that cannot legally operate today. Wikipedia pages can lag; these make sure a stale listing never puts a banned route on the map.",
+  "closed_countries": {
+    "UA": "Ukrainian airspace has been closed to civil flights since February 2022."
+  },
+  "blocked_country_pairs": [
+    { "a": ["RU", "BY"], "b": ["US", "CA", "GB", "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "NO", "IS", "CH"],
+      "why": "The US, Canada, the UK, the EU, Norway, Iceland and Switzerland closed their airspace to Russian (and Belarusian) airlines in 2021–22, and their own airlines stopped flying there." }
+  ]
+}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Flight Atlas</title>
+<meta name="description" content="Every passenger air route in the world on a globe, each drawn by how many people fly it in a year. Click an airport to see everywhere you can fly nonstop from it.">
+<meta name="theme-color" content="#F2F0EB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1F2124" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Flight Atlas">
+<meta property="og:description" content="Every passenger air route in the world, drawn by how many people fly it in a year.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://flights.theojaffee.net/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="map" aria-label="Globe of the world's flight routes"></div>
+  <aside id="panel" aria-label="Airports and routes">
+    <button class="grip" id="grip" aria-label="Expand or collapse panel"></button>
+    <div class="phead" id="phead">
+      <div class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+        <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Search airports, cities, codes" aria-label="Search airports by name, city, country or code">
+        <button id="qclear" aria-label="Clear search">✕</button>
+      </div>
+    </div>
+    <div id="body"></div>
+  </aside>
+  <div class="ctl">
+    <div class="grp">
+      <button id="zin" aria-label="Zoom in"><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
+      <button id="zout" aria-label="Zoom out"><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h10"/></svg></button>
+    </div>
+    <div class="grp">
+      <button id="proj" aria-label="Switch to a flat map" title="Flat map"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="M2 8h12M8 3.5v9"/></svg></button>
+      <button id="home" aria-label="Show the whole world"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c-2.2 2.4-2.2 9.6 0 12M8 2c2.2 2.4 2.2 9.6 0 12"/></svg></button>
+    </div>
+  </div>
+  <div id="tip" role="status" aria-live="polite"></div>
+  <div class="attr">Data: <a href="https://en.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a> · <a href="https://www.transtats.bts.gov/" target="_blank" rel="noopener">US DOT</a> · <a href="https://www.caa.co.uk/data-and-analysis/uk-aviation-market/airports/uk-airport-data/" target="_blank" rel="noopener">UK CAA</a> · <a href="https://ec.europa.eu/eurostat" target="_blank" rel="noopener">Eurostat</a> · <a href="https://www.gov.br/anac/" target="_blank" rel="noopener">ANAC</a> · <a href="https://www.bitre.gov.au/" target="_blank" rel="noopener">BITRE</a> · <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a><span class="wide"> · Map: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></span></div>
+  <div id="loading"><div><span>Loading Flight Atlas…</span><span class="bar"><i></i></span></div></div>
+</div>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
