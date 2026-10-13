@@ -288,10 +288,21 @@ def main():
 
     # Title -> IATA, from Wikidata sitelinks and from the pages themselves.
     title_to_iata = {}
+    # Wikidata now and then gives a small field another airport's IATA code (Lasondre, WIMO, as
+    # La Crosse's LSE). Unless OurAirports' airport with that code goes by the same name, the code is
+    # only taken when OurAirports doesn't give that ICAO code another one.
+    plain = lambda t: re.sub(r'\b(international|regional|airport|aerodrome|airfield)\b|[^a-z0-9]', '', fold(t or ''))
+    icao_iata, iata_names = {}, defaultdict(set)
+    with open(CACHE / 'airports.csv', newline='') as f:
+        for row in csv.DictReader(f):
+            for icao in {row['icao_code'], row['gps_code'], row['ident']} - {''}:
+                icao_iata.setdefault(icao, row['iata_code'].strip())
+            if row['iata_code'].strip():
+                iata_names[row['iata_code'].strip()] |= {plain(row['name']), plain(title_from_url(row['wikipedia_link']))}
     with open(CACHE / 'wikidata_iata.csv', newline='') as f:
         for row in csv.DictReader(f):
             title = title_from_url(row['article'])
-            if title:
+            if title and (plain(title) in iata_names[row['iata']] or icao_iata.get(row['icao'], row['iata']) == row['iata']):
                 title_to_iata.setdefault(norm_title(title), row['iata'])
     for iata, title in airports_to_fetch().items():
         title_to_iata[norm_title(title)] = iata

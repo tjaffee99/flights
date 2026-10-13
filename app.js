@@ -52,29 +52,58 @@ function distance(x, y) {
 }
 
 // the great circle from x to y as [lon, lat] points about every 250 km, in pieces split where it
-// crosses the antimeridian (the globe has one world: a longitude past ±180 would leave its surface)
+// crosses the antimeridian (the globe has one world: a longitude past ±180 would leave its surface).
+// The map draws straight lines between points in Mercator, which near a pole bend far off the great
+// circle, so above 60° the points close in until no step crosses more than 2° of longitude. Mercator ends
+// at 85°, so the few routes over the top pass under the polar cap, unseen, rather than round its edge.
+const CAP = 85;
 function arc(x, y, km) {
   const n = Math.max(2, Math.ceil(km / 250));
   const f1 = x.lat * RAD, l1 = x.lon * RAD, f2 = y.lat * RAD, l2 = y.lon * RAD;
   const p1 = [Math.cos(f1) * Math.cos(l1), Math.cos(f1) * Math.sin(l1), Math.sin(f1)];
   const p2 = [Math.cos(f2) * Math.cos(l2), Math.cos(f2) * Math.sin(l2), Math.sin(f2)];
   const w = km / 6371, sw = Math.sin(w);
-  const parts = [[]];
-  let prev = null;
-  for (let k = 0; k <= n; k++) {
-    const t = k / n;
+  const at = t => {
     const s = sw < 1e-9 ? [1 - t, t] : [Math.sin((1 - t) * w) / sw, Math.sin(t * w) / sw];
     const v = [0, 1, 2].map(j => s[0] * p1[j] + s[1] * p2[j]);
-    const pt = [Math.atan2(v[1], v[0]) / RAD, Math.atan2(v[2], Math.hypot(v[0], v[1])) / RAD];
-    if (prev && Math.abs(pt[0] - prev[0]) > 180) {
-      const edge = prev[0] > 0 ? 180 : -180;
-      const next = pt[0] + (edge > 0 ? 360 : -360);
-      const lat = prev[1] + (pt[1] - prev[1]) * (edge - prev[0]) / (next - prev[0]);
-      parts[parts.length - 1].push([edge, +lat.toFixed(3)]);
-      parts.push([[-edge, +lat.toFixed(3)]]);
+    return [Math.atan2(v[1], v[0]) / RAD, Math.atan2(v[2], Math.hypot(v[0], v[1])) / RAD, t];
+  };
+  const points = [at(0)];
+  for (let k = 1; k <= n; k++) {
+    const p = at(k / n), q = points[points.length - 1];
+    const turn = Math.max(Math.abs(p[1]), Math.abs(q[1])) < 60 ? 0 : Math.abs(((p[0] - q[0] + 540) % 360) - 180);
+    const m = Math.min(90, Math.ceil(turn / 2));
+    for (let j = 1; j < m; j++) points.push(at((k - 1 + j / m) / n));
+    points.push(p);
+  }
+  // the stretches below the cap, each ending on its edge
+  const over = p => Math.abs(p[1]) > CAP;
+  const runs = [[]];
+  points.forEach((p, k) => {
+    const q = points[k - 1];
+    if (q && over(p) !== over(q)) {
+      let lo = q[2], hi = p[2];
+      for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (over(at(mid)) === over(q)) lo = mid; else hi = mid; }
+      const edge = at(over(q) ? hi : lo);
+      if (over(p)) { runs[runs.length - 1].push(edge); runs.push([]); } else runs[runs.length - 1].push(edge);
     }
-    parts[parts.length - 1].push([+pt[0].toFixed(3), +pt[1].toFixed(3)]);
-    prev = pt;
+    if (!over(p)) runs[runs.length - 1].push(p);
+  });
+  const parts = [];
+  for (const run of runs.filter(r => r.length > 1)) {
+    parts.push([]);
+    let prev = null;
+    for (const pt of run) {
+      if (prev && Math.abs(pt[0] - prev[0]) > 180) {
+        const edge = prev[0] > 0 ? 180 : -180;
+        const next = pt[0] + (edge > 0 ? 360 : -360);
+        const lat = prev[1] + (pt[1] - prev[1]) * (edge - prev[0]) / (next - prev[0]);
+        parts[parts.length - 1].push([edge, +lat.toFixed(3)]);
+        parts.push([[-edge, +lat.toFixed(3)]]);
+      }
+      parts[parts.length - 1].push([+pt[0].toFixed(3), +pt[1].toFixed(3)]);
+      prev = pt;
+    }
   }
   return parts;
 }
@@ -362,7 +391,8 @@ const S = {
   stack: [],       // views to go back to
   hover: null,     // what the hover layer shows (a route index, or a key for a path)
   reach: false,    // airport view: flights away instead of nonstop routes
-  tab: stored('flights.tab', 'airports'),   // overview: busiest airports, routes or airlines
+  tab: stored('flights.tab', 'airlines'),   // overview: biggest airlines, busiest airports or routes
+  alOpen: false,   // airport view: the list of its airlines is open
   min: 0,          // minimum passengers per route
   dom: true, intl: true,
   lines: stored('flights.lines', 'on') !== 'off',
@@ -383,6 +413,7 @@ function overviewFilter() {
 function focusOf(view) {
   if (view.t === 'airport') return view.al == null ? A[view.i].routes : A[view.i].routes.filter(i => R[i].airlines.includes(view.al));
   if (view.t === 'route') return [view.i];
+  if (view.t === 'trip') { const reach = reachFrom(view.a); return reach.dist[view.b] === -1 ? [] : pathTo(reach, view.b).filter(l => l.route !== undefined).map(l => l.route); }
   if (view.t === 'airline') return AL[view.i].routes;
   return [];
 }
@@ -395,7 +426,9 @@ function showSelection() {
   const spots = new Map();
   for (const i of ids) for (const k of [R[i].a, R[i].b]) spots.set(k, A[k]);
   if (v.t === 'airport') spots.set(v.i, A[v.i]);
-  map.getSource('focus-airports').setData(collection([...spots.values()].map(x => point(x, v.t === 'airport' && x.i === v.i))));
+  const ends = v.t === 'airport' ? [v.i] : v.t === 'trip' ? [v.a, v.b] : [];
+  for (const k of ends) spots.set(k, A[k]);
+  map.getSource('focus-airports').setData(collection([...spots.values()].map(x => point(x, ends.includes(x.i)))));
   const reach = v.t === 'airport' && v.al == null && S.reach && !A[v.i].other;
   map.getSource('reach').setData(reach ? reachGeo(v.i) : EMPTY);
   map.getSource('reach-hi').setData(EMPTY);
@@ -454,33 +487,50 @@ function setHover(i) {
 }
 
 // ---------------------------------------------------------------- flights away
-// Breadth-first search over the route network from one airport: the fewest flights to each other
-// airport, and through which connection (the busiest one, when several are equally short). The road
-// and ferry links cost no flights, so each level is first closed over them.
+// The fewest flights from one airport to every other, and the way there: of the ways with that few
+// flights, the shortest, with thin routes counted a little longer (so the way goes through the hubs
+// people actually connect at). Road and ferry links cost no flights, only their distance.
 let reachCache = null;
 const band = d => d === -1 ? 4 : Math.max(0, Math.min(d, 4) - 1);   // nonstop (or by road), 2, 3, 4+, unreachable
+const legCost = r => r.km + 400 * Math.max(0, 6 - Math.log10(Math.max(10, r.pax)));
 function reachFrom(src) {
   if (reachCache && reachCache.src === src) return reachCache;
+  // Dijkstra on flights × 1e7 + cost, with a binary heap of [key, airport]
   const n = A.length, dist = new Int16Array(n).fill(-1), via = new Int32Array(n).fill(-1);   // via: route, or -2-g for road g
-  dist[src] = 0;
-  let frontier = [src];
-  for (let d = 0; frontier.length; d++) {
-    for (let k = 0; k < frontier.length; k++) {
-      const u = frontier[k];
-      for (const g of A[u].ground) {
-        const v = G[g].a === u ? G[g].b : G[g].a;
-        if (dist[v] === -1) { dist[v] = d; via[v] = -2 - g; frontier.push(v); }
+  const key = new Float64Array(n).fill(Infinity), done = new Uint8Array(n);
+  const heap = [];
+  const push = (k, v) => {
+    heap.push([k, v]);
+    for (let c = heap.length - 1; c > 0; ) {
+      const p = (c - 1) >> 1;
+      if (heap[p][0] <= heap[c][0]) break;
+      [heap[p], heap[c]] = [heap[c], heap[p]]; c = p;
+    }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      for (let c = 0; ; ) {
+        const l = 2 * c + 1, r = l + 1;
+        let m = c;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === c) break;
+        [heap[m], heap[c]] = [heap[c], heap[m]]; c = m;
       }
     }
-    const next = [];
-    for (const u of frontier) {
-      for (const ri of A[u].routes) {
-        const r = R[ri], v = r.a === u ? r.b : r.a;
-        if (dist[v] === -1) { dist[v] = d + 1; via[v] = ri; next.push(v); }
-        else if (dist[v] === d + 1 && via[v] >= 0 && r.pax > R[via[v]].pax) via[v] = ri;
-      }
-    }
-    frontier = next;
+    return top;
+  };
+  const relax = (v, k, how) => { if (k < key[v]) { key[v] = k; via[v] = how; push(k, v); } };
+  key[src] = 0; push(0, src);
+  while (heap.length) {
+    const [k, u] = pop();
+    if (done[u]) continue;
+    done[u] = 1;
+    dist[u] = Math.floor(k / 1e7);
+    for (const g of A[u].ground) relax(G[g].a === u ? G[g].b : G[g].a, k + G[g].km, -2 - g);
+    for (const ri of A[u].routes) { const r = R[ri]; relax(r.a === u ? r.b : r.a, k + 1e7 + legCost(r), ri); }
   }
   const counts = [0, 0, 0, 0, 0];
   const features = [];
@@ -544,12 +594,15 @@ const BACK = '<svg viewBox="0 0 9 14" fill="none" stroke="currentColor" stroke-w
 
 function render() {
   const v = S.view;
+  lists.clear();
   if (S.q) body.innerHTML = searchView();
-  else if (v.t === 'route') body.innerHTML = routeView(R[v.i]);
+  else if (v.t === 'route') body.innerHTML = routeView(R[v.i], v.from);
+  else if (v.t === 'trip') body.innerHTML = tripView(v.a, v.b);
   else if (v.t === 'airport') body.innerHTML = airportView(A[v.i], v.al ?? null);
   else if (v.t === 'airline') body.innerHTML = airlineView(AL[v.i]);
   else body.innerHTML = overview();
   body.scrollTop = 0;
+  grow();
   $('#phead').classList.remove('scrolled');
 }
 
@@ -559,9 +612,36 @@ function backLabel() {
   if (!prev || prev.t === 'home') return 'All routes';
   if (prev.t === 'airport') return A[prev.i].code + (prev.al != null ? ' · ' + AL[prev.al].name : '');
   if (prev.t === 'route') return `${A[R[prev.i].a].code}–${A[R[prev.i].b].code}`;
+  if (prev.t === 'trip') return `${A[prev.a].code}–${A[prev.b].code}`;
   return AL[prev.i].name;
 }
 const backButton = () => `<button class="back" data-back>${BACK}${esc(backLabel())}</button>`;
+
+// an airport code as letters on a departures board
+const codeTag = (code, cls = '') => `<span class="code${cls ? ' ' + cls : ''}" aria-label="${esc(code)}">${[...code].map(c => `<i aria-hidden="true">${esc(c)}</i>`).join('')}</span>`;
+
+// long lists show a screenful, then more as they scroll into view, all the way to the end
+const lists = new Map();
+let listSeq = 0;
+function lazy(items, row, first = 60) {
+  if (items.length <= first) return items.map(row).join('');
+  lists.set(++listSeq, { items, row, at: first });
+  return items.slice(0, first).map(row).join('') + `<div class="more" data-more="${listSeq}" aria-hidden="true"></div>`;
+}
+// adds rows to each list whose end has come within a screen of view
+function grow() {
+  if (!body.clientHeight) return;   // the panel is folded away: wait until it's back
+  const bottom = body.getBoundingClientRect().bottom + Math.max(600, body.clientHeight);
+  for (const el of body.querySelectorAll('[data-more]')) {
+    const list = lists.get(+el.dataset.more);
+    while (list && list.at < list.items.length && el.getBoundingClientRect().top < bottom) {
+      el.insertAdjacentHTML('beforebegin', list.items.slice(list.at, list.at + 100).map(list.row).join(''));
+      list.at += 100;
+    }
+    if (!list || list.at >= list.items.length) { el.remove(); lists.delete(+el.dataset.more); }
+  }
+}
+body.addEventListener('scroll', () => { if (lists.size) grow(); }, { passive: true });   // scroll events come at most once a frame
 
 function routeRow(r, from, top) {
   const other = A[from === null ? r.a : (r.a === from ? r.b : r.a)];
@@ -570,16 +650,16 @@ function routeRow(r, from, top) {
   const share = Math.max(2, 100 * r.pax / top);
   return `<button class="row" data-route="${r.i}">
     <span class="bar" style="width:calc((100% - 32px) * ${(share / 100).toFixed(3)})"></span>
-    ${from === null ? '' : `<span class="code">${esc(other.code)}</span>`}
+    ${from === null ? '' : codeTag(other.code)}
     <span class="t"><b>${esc(title)}</b><span>${esc(sub)}</span></span>
     <span class="n">${paxLabel(r)}${isEst(r) ? '<small>estimate</small>' : ''}</span></button>`;
 }
 
 function airportRow(x, note) {
-  if (x.other) return `<button class="row other" data-airport="${x.i}"><span class="code">${esc(x.code)}</span>
+  if (x.other) return `<button class="row other" data-airport="${x.i}">${codeTag(x.code)}
     <span class="t"><b>${esc(x.name)}</b><span>${esc(place(x))}</span></span>
     <span class="n"><small>no airline<br>flights</small></span></button>`;
-  return `<button class="row" data-airport="${x.i}"><span class="code">${esc(x.code)}</span>
+  return `<button class="row" data-airport="${x.i}">${codeTag(x.code)}
     <span class="t"><b>${esc(x.name)}</b><span>${esc(place(x))}</span></span>
     <span class="n">${note || `${fmtPax(x.pax)}<small>${x.routes.length} routes</small>`}</span></button>`;
 }
@@ -591,7 +671,7 @@ const logo = (al, cls = '') => al.logo
   ? `<img class="logo ${cls}" src="data/logos/${esc(al.logo)}" alt="" loading="lazy" decoding="async">`
   : `<span class="logo none ${cls}" aria-hidden="true">${esc(initials(al.name))}</span>`;
 // a chip opens the airline's network, or (data-only) narrows the airport to its routes
-const airlineChip = (al, count, attr = 'data-airline') => `<button class="al" ${attr}="${al.k}">${logo(al)}<span>${esc(al.name)}</span>${count ? `<small>${count}</small>` : ''}</button>`;
+const airlineChip = (al, count, attr = 'data-airline', on = false) => `<button class="al" ${attr}="${al.k}"${on ? ' aria-pressed="true"' : ''}>${logo(al)}<span>${esc(al.name)}</span>${count ? `<small>${count}</small>` : ''}</button>`;
 function airlineRow(al) {
   const airports = new Set(al.routes.flatMap(i => [R[i].a, R[i].b])).size;
   return `<button class="row" data-airline="${al.k}">${logo(al, 'row-logo')}
@@ -600,32 +680,33 @@ function airlineRow(al) {
 }
 
 // the overview: headline numbers, then one list at a time, in tabs
-const TABS = [['airports', 'Busiest airports'], ['routes', 'Busiest routes'], ['airlines', 'Biggest airlines']];
+const TABS = [['airlines', 'Airlines', 'Biggest airlines', 'by routes'], ['airports', 'Airports', 'Busiest airports', 'by passengers'],
+              ['routes', 'Routes', 'Busiest routes', 'by passengers']];
 let overviewParts = null;
 function overview() {
   if (!overviewParts) {
     const total = R.reduce((s, r) => s + r.pax, 0);
     const measured = R.reduce((s, r) => s + (isEst(r) ? 0 : r.pax), 0);
     const live = A.filter(x => x.routes.length).length;
-    const topRoutes = R.slice(0, 50);   // the file lists routes busiest first
     overviewParts = {
       head: `<div class="intro"><h1>Flight Atlas</h1>
-    <p>Every passenger air route flying today, drawn by how many people fly it in a year. Click an airport to see everywhere it flies nonstop.</p></div>
+    <p>Every passenger air route flying today, drawn by how many people fly it in a year. Click an airport to see everywhere it flies nonstop, then shift-click another for the way between them.</p></div>
   <div class="stats"><div><b>${fmtInt(R.length)}</b><span>routes</span></div><div><b>${fmtInt(live)}</b><span>airports</span></div>
     <div><b>${(total / 1e9).toFixed(2)}B</b><span>passengers a year</span></div></div>`,
-      airports: A.filter(x => x.routes.length).sort((p, q) => q.pax - p.pax).slice(0, 50).map(x => airportRow(x)).join(''),
-      routes: topRoutes.map(r => routeRow(r, null, topRoutes[0].pax)).join(''),
-      airlines: [...AL].sort((p, q) => q.routes.length - p.routes.length).slice(0, 50).map(airlineRow).join(''),
+      // the file lists routes busiest first
+      airlines: [AL.filter(al => al.routes.length).sort((p, q) => q.routes.length - p.routes.length), airlineRow],
+      airports: [A.filter(x => x.routes.length).sort((p, q) => q.pax - p.pax), x => airportRow(x)],
+      routes: [R, r => routeRow(r, null, R[0].pax)],
       foot: `<div class="note small">Routes are the ones airlines fly as of ${esc(D.routes_as_of)}, from Wikipedia's airport pages.
     Passengers are counted for ${Math.round(100 * measured / total)}% of travel (${esc([...new Set(D.sources.filter(s => s.id).map(s => s.short))].join(', '))});
     the rest are estimates fitted to each airport’s annual total. <a href="${esc(D.about)}" target="_blank" rel="noopener">How this was made</a></div>`,
     };
   }
-  const tab = TABS.some(([k]) => k === S.tab) ? S.tab : 'airports';
+  const tab = TABS.find(([k]) => k === S.tab) || TABS[0];
+  const [items, row] = overviewParts[tab[0]];
   return `${overviewParts.head}
-  <div class="tabs" role="tablist">${TABS.map(([k, label]) =>
-    `<button role="tab" data-tab="${k}" aria-selected="${k === tab}">${label.replace('Busiest ', '').replace('Biggest ', '').replace(/^./, c => c.toUpperCase())}</button>`).join('')}</div>
-  <div class="sec">${TABS.find(([k]) => k === tab)[1]}</div>${overviewParts[tab]}
+  <div class="tabs" role="tablist">${TABS.map(([k, label]) => `<button role="tab" data-tab="${k}" aria-selected="${k === tab[0]}">${label}</button>`).join('')}</div>
+  <div class="sec">${tab[2]} <small>· all ${fmtInt(items.length)}, ${tab[3]}</small></div>${lazy(items, row)}
   ${overviewParts.foot}`;
 }
 
@@ -644,9 +725,10 @@ function reachPanel(x) {
   <div class="note small">The fewest flights from ${esc(x.code)} to every airport on the map. A few small networks no flight reaches (the Aran Islands, Ketchikan’s floatplanes) count a road or ferry trip as free. Point at a row to pick out those airports, or at an airport to see the way there.</div>`;
 }
 
+const CHEVRON = '<svg class="chev" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>';
 function airportView(x, al = null) {
   if (x.other) return `${backButton()}
-  <div class="dhead other"><span class="code big">${esc(x.code)}</span><div><h2>${titleLink(x)}</h2><div class="sub">${esc(place(x))}</div></div></div>
+  <div class="dhead other">${codeTag(x.code, 'big')}<div><h2>${titleLink(x)}</h2><div class="sub">${esc(place(x))}</div></div></div>
   <div class="note">No scheduled airline flights. ${esc((D.closed && D.closed[x.cc]) ||
     'Airports like this one serve private planes, air taxis, the military, or have closed or not yet opened.')}</div>`;
   const all = x.routes.map(i => R[i]);
@@ -660,18 +742,23 @@ function airportView(x, al = null) {
   const byRoutes = [...airlines].sort((p, q) => q[1] - p[1]);
   const filter = al === null ? '' : `<div class="filter">${logo(AL[al], 'row-logo')}<span><b>${esc(AL[al].name)}</b> only</span>
     <button data-airline="${al}">Whole network</button><button data-unfilter aria-label="Show every airline at ${esc(x.code)}" title="Every airline">✕</button></div>`;
+  // the airlines fold away behind one button, so the destinations come first
+  const drop = byRoutes.length ? `<div class="alfold"><button class="aldrop" data-alopen aria-expanded="${S.alOpen}" aria-controls="alpanel">
+      <span class="peek">${byRoutes.slice(0, 4).map(([k]) => logo(AL[k])).join('')}</span><span class="what">${byRoutes.length} airline${byRoutes.length > 1 ? 's' : ''}</span>${CHEVRON}</button>
+    <div class="alpanel" id="alpanel"${S.alOpen ? '' : ' hidden'}><div class="hint">Pick one to see only its routes</div>
+    <div class="als">${byRoutes.map(([k, n]) => airlineChip(AL[k], n, 'data-only', k === al)).join('')}</div></div></div>` : '';
   return `${backButton()}
-  <div class="dhead"><span class="code big">${esc(x.code)}</span><div><h2>${titleLink(x)}</h2><div class="sub">${esc(place(x))}</div></div></div>
+  <div class="dhead">${codeTag(x.code, 'big')}<div><h2>${titleLink(x)}</h2><div class="sub">${esc(place(x))}</div></div></div>
   ${filter}
   <div class="stats"><div><b>${(est > pax / 2 ? '≈ ' : '') + fmtPax(pax)}</b><span>${al === null ? 'passengers a year' : 'on these routes'}</span></div>
     <div><b>${routes.length}</b><span>nonstop destinations</span></div><div><b>${countries.size}</b><span>countries</span></div></div>
-  ${al === null ? `<div class="opts"><span class="seg" role="group" aria-label="Show on the map">
-    <button data-reach="0" aria-pressed="${!S.reach}">Nonstop routes</button><button data-reach="1" aria-pressed="${S.reach}">Flights away</button></span></div>
-  ${S.reach ? reachPanel(x) : ''}
-  ${byRoutes.length ? `<div class="sec">Airlines <small>· pick one to see only its routes</small></div><div class="als">${byRoutes.map(([k, n]) => airlineChip(AL[k], n, 'data-only')).join('')}</div>` : ''}` : ''}
+  ${drop}
+  ${al === null ? `<div class="opts"><span class="seg wide" role="group" aria-label="Show on the map">
+    <button data-reach="0" aria-pressed="${!S.reach}">Nonstop routes</button><button data-reach="1" aria-pressed="${S.reach}">Flights away</button></span></div>` : ''}
+  ${al === null && S.reach ? reachPanel(x) : ''}
   <div class="sec">Destinations by passengers</div>
-  ${routes.map(r => routeRow(r, x.i, top)).join('') || '<div class="note">No current passenger routes.</div>'}
-  ${est ? `<div class="note small">≈ marks estimated passengers.</div>` : ''}`;
+  ${lazy(routes, r => routeRow(r, x.i, top)) || '<div class="note">No current passenger routes.</div>'}
+  ${est ? `<div class="note small">≈ marks estimated passengers. Shift-click another airport on the map for the way there.</div>` : ''}`;
 }
 
 function airlineView(al) {
@@ -686,16 +773,17 @@ function airlineView(al) {
   <div class="stats"><div><b>${fmtInt(routes.length)}</b><span>routes</span></div><div><b>${fmtInt(ports.size)}</b><span>airports</span></div>
     <div><b>${countries.size}</b><span>countries</span></div></div>
   <div class="sec">Where it flies most <small>· pick one to see its routes from there</small></div>${hubs.map(([k, n]) => airportRow(A[k], `${n}<small>routes</small>`)).join('')}
-  <div class="sec">Routes</div>${routes.slice(0, 150).map(r => routeRow(r, null, top)).join('')}
-  <div class="note small">${routes.length > 150 ? `The busiest 150 of ${fmtInt(routes.length)} routes. ` : ''}Passenger numbers are for everyone on the route, on any airline. Airlines come from Wikipedia’s airport pages, which list the brand that sells the flight.</div>`;
+  <div class="sec">Routes <small>· busiest first</small></div>${lazy(routes, r => routeRow(r, null, top))}
+  <div class="note small">Passenger numbers are for everyone on the route, on any airline. Airlines come from Wikipedia’s airport pages, which list the brand that sells the flight.</div>`;
 }
 
 // a rough block time from distance, fitted to typical schedules (taxi, climb and descent included)
-function flightTime(km) {
-  const min = Math.max(25, Math.round((45 + 0.0703 * km) / 5) * 5);
+const flightMinutes = km => Math.max(25, Math.round((45 + 0.0703 * km) / 5) * 5);
+function fmtMinutes(min) {
   const h = Math.floor(min / 60), m = min % 60;
   return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
 }
+const flightTime = km => fmtMinutes(flightMinutes(km));
 
 // where a route's passenger count comes from, in a few words
 function sourceText(r) {
@@ -705,20 +793,49 @@ function sourceText(r) {
   return `Passengers from ${src.short}, ${src.period}${r.months ? ` (scaled up from ${r.months} month${r.months > 1 ? 's' : ''})` : ''}`;
 }
 
-function routeView(r) {
-  const x = A[r.a], y = A[r.b];
+function routeView(r, from) {
+  const [x, y] = from === r.b ? [A[r.b], A[r.a]] : [A[r.a], A[r.b]];
   const directional = (D.sources.find(s => s.id === r.src) || {}).directional;
+  const [xy, yx] = from === r.b ? [r.ba, r.ab] : [r.ab, r.ba];
   return `${backButton()}
-  <div class="route-ends"><span class="code big">${esc(x.code)}</span><span class="arrow">⇄</span><span class="code big">${esc(y.code)}</span></div>
+  <div class="route-ends">${codeTag(x.code, 'big')}<span class="arrow">⇄</span>${codeTag(y.code, 'big')}</div>
   <div class="dhead" style="padding-top:4px"><div><h2>${esc(x.city || x.name)} – ${esc(y.city || y.name)}</h2>
     <div class="sub">${esc(country(x.cc))}${x.cc === y.cc ? ' · domestic' : ' – ' + esc(country(y.cc))}${r.seasonal ? ' · seasonal' : ''}</div></div></div>
   <div class="stats"><div><b>${paxLabel(r)}</b><span>passengers a year</span></div>
     <div><b>${flightTime(r.km)}</b><span>flight time</span></div>
     <div><b>${fmtInt(r.km)} km</b><span>${fmtInt(r.km * 0.621371)} mi</span></div></div>
-  ${directional ? `<div class="dir">${esc(x.code)} → ${esc(y.code)} ${fmtInt(r.ab)} · ${esc(y.code)} → ${esc(x.code)} ${fmtInt(r.ba)}</div>` : ''}
+  ${directional ? `<div class="dir">${esc(x.code)} → ${esc(y.code)} ${fmtInt(xy)} · ${esc(y.code)} → ${esc(x.code)} ${fmtInt(yx)}</div>` : ''}
   <div class="src">${esc(sourceText(r))}. Flight time is typical for the distance.</div>
   ${r.airlines.length ? `<div class="sec">Airlines</div><div class="als">${r.airlines.map(k => airlineChip(AL[k])).join('')}</div>` : ''}
   <div class="sec">Airports</div>${airportRow(x)}${airportRow(y)}`;
+}
+
+// the way from one airport to another with no nonstop flight: the fewest flights, stop by stop
+function tripView(a, b) {
+  const x = A[a], y = A[b], reach = reachFrom(a);
+  const head = `${backButton()}
+  <div class="route-ends">${codeTag(x.code, 'big')}<span class="arrow">→</span>${codeTag(y.code, 'big')}</div>`;
+  if (reach.dist[b] === -1) return `${head}<div class="note">No airline flights connect ${esc(x.code)} and ${esc(y.code)}.</div>`;
+  const legs = pathTo(reach, b), flights = legs.filter(l => l.route !== undefined);
+  const stops = [a];
+  for (const leg of legs) { const link = leg.route !== undefined ? R[leg.route] : G[leg.road]; stops.push(link.a === stops[stops.length - 1] ? link.b : link.a); }
+  const km = legs.reduce((s, l) => s + (l.route !== undefined ? R[l.route] : G[l.road]).km, 0);
+  const minutes = flights.reduce((s, l) => s + flightMinutes(R[l.route].km), 0);
+  const via = stops.slice(1, -1).filter(k => legs.some(l => l.route !== undefined && (R[l.route].a === k || R[l.route].b === k)));
+  const stop = k => `<button class="stop" data-airport="${k}">${codeTag(A[k].code)}<span class="t"><b>${esc(A[k].city || A[k].name)}</b><span>${esc(A[k].name)}</span></span></button>`;
+  const leg = (l, from) => {
+    if (l.road !== undefined) return `<div class="leg road"><span class="rail"></span><span class="t"><b>By road or ferry</b><span>${fmtInt(G[l.road].km)} km</span></span></div>`;
+    const r = R[l.route], names = r.airlines.slice(0, 2).map(k => AL[k].name).join(', ') + (r.airlines.length > 2 ? ` +${r.airlines.length - 2}` : '');
+    return `<button class="leg" data-route="${r.i}"><span class="rail"></span><span class="t"><b>${flightTime(r.km)}</b> · ${fmtInt(r.km)} km
+      <span>${names ? esc(names) + ' · ' : ''}${paxLabel(r)} passengers a year</span></span></button>`;
+  };
+  return `${head}
+  <div class="dhead" style="padding-top:4px"><div><h2>${esc(x.city || x.name)} to ${esc(y.city || y.name)}</h2>
+    <div class="sub">No nonstop flight${via.length ? ` · via ${via.map(k => esc(A[k].code)).join(', ')}` : ''}</div></div></div>
+  <div class="stats"><div><b>${flights.length}</b><span>flights</span></div><div><b>${fmtMinutes(minutes)}</b><span>in the air</span></div>
+    <div><b>${fmtInt(km)} km</b><span>${fmtInt(km * 0.621371)} mi</span></div></div>
+  <div class="trip">${stops.map((k, n) => stop(k) + (n < legs.length ? leg(legs[n], k) : '')).join('')}</div>
+  <div class="note small">The fewest flights between them, by the shortest way through routes people fly most. Times are typical for each distance, without time to connect; real itineraries depend on schedules.</div>`;
 }
 
 // search: airports by code, name, city or country; airlines by name
@@ -753,9 +870,10 @@ function searchView() {
 }
 
 // ---------------------------------------------------------------- navigation
+const viewKey = v => [v.t, v.i, v.al, v.a, v.b].join();
 function go(view, { fly = true, push = true } = {}) {
   if (view.t === 'home') S.stack = [];
-  else if (push && !(view.t === S.view.t && view.i === S.view.i && view.al === S.view.al)) S.stack = [...S.stack, S.view].slice(-30);
+  else if (push && viewKey(view) !== viewKey(S.view)) S.stack = [...S.stack, S.view].slice(-30);
   S.view = view;
   S.q = ''; $('#q').value = ''; $('#qclear').classList.remove('show');
   setHover(null); render(); showSelection(); writeHash();
@@ -774,7 +892,27 @@ function openAirport(i, opts) {
   const keep = al != null && A[i].routes.some(r => R[r].airlines.includes(al));
   go(keep ? { t: 'airport', i, al } : { t: 'airport', i }, opts);
 }
-const selectRoute = (i, opts) => go({ t: 'route', i }, opts);
+// a route opened from one of its airports is shown from that end
+function selectRoute(i, opts) {
+  const here = anchor();
+  go({ t: 'route', i, from: here === R[i].a || here === R[i].b ? here : undefined }, opts);
+}
+// the airport a shift-click goes from: the one open, or the start of the route or trip open
+function anchor() {
+  const v = S.view;
+  if (v.t === 'airport') return v.i;
+  if (v.t === 'trip') return v.a;
+  if (v.t === 'route') return v.from ?? R[v.i].a;
+  return null;
+}
+// shift-click: the nonstop route from the anchor airport to this one, or else the way there
+function tripTo(b, opts = {}) {
+  const a = anchor();
+  if (a === null || a === b || A[a].other || A[b].other) { openAirport(b, opts); return; }
+  const again = S.view.t === 'route' || S.view.t === 'trip';   // a new end for the same start replaces it
+  const r = A[a].routes.find(i => R[i].a === b || R[i].b === b);
+  go(r !== undefined ? { t: 'route', i: r, from: a } : { t: 'trip', a, b }, { ...opts, push: !again });
+}
 const selectAirline = (k, opts) => go({ t: 'airline', i: k }, opts);
 
 function flyTo(view) {
@@ -785,6 +923,13 @@ function flyTo(view) {
   } else if (view.t === 'route') {
     const r = R[view.i], pts = arc(A[r.a], A[r.b], r.km).flat(), mid = pts[Math.floor(pts.length / 2)];
     const zoom = Math.max(1, Math.min(5.5, Math.log2(26000 / Math.max(r.km, 300)) - (phone() ? 0.8 : 0)));
+    map.easeTo({ center: mid, zoom, duration: 900, padding: panelPadding() });
+  } else if (view.t === 'trip') {
+    const ids = focusOf(view);
+    const stops = [...new Set([view.a, view.b, ...ids.flatMap(i => [R[i].a, R[i].b])])].map(k => A[k]);
+    const pts = arc(A[view.a], A[view.b], distance(A[view.a], A[view.b])).flat(), mid = pts[Math.floor(pts.length / 2)];
+    const span = Math.max(...stops.map(x => distance(x, { lon: mid[0], lat: mid[1] }))) * 2;
+    const zoom = Math.max(0.8, Math.min(5.5, Math.log2(26000 / Math.max(span, 300)) - (phone() ? 0.8 : 0)));
     map.easeTo({ center: mid, zoom, duration: 900, padding: panelPadding() });
   } else if (view.t === 'airline') {
     // center on the airline's busiest airport, far enough out to see its network
@@ -804,7 +949,8 @@ const airlineSlug = al => (al.wiki || al.name).replace(/ /g, '_');
 function writeHash() {
   const v = S.view;
   let h = '';
-  if (v.t === 'route') h = '#' + A[R[v.i].a].code + '-' + A[R[v.i].b].code;
+  if (v.t === 'route') h = '#' + (v.from === R[v.i].b ? A[R[v.i].b].code + '-' + A[R[v.i].a].code : A[R[v.i].a].code + '-' + A[R[v.i].b].code);
+  else if (v.t === 'trip') h = '#' + A[v.a].code + '-' + A[v.b].code;
   else if (v.t === 'airport' && v.al != null) h = '#airline/' + encodeURIComponent(airlineSlug(AL[v.al])) + '/' + A[v.i].code;
   else if (v.t === 'airport') h = '#' + A[v.i].code;
   else if (v.t === 'airline') h = '#airline/' + encodeURIComponent(airlineSlug(AL[v.i]));
@@ -828,8 +974,9 @@ function readHash() {
   if (!x) { hashWaits = !othersLoaded; return; }
   if (!m[2]) { selectAirport(x.i); return; }
   const y = byCode(m[2]);
-  const r = y && x.routes.map(i => R[i]).find(r => r.a === y.i || r.b === y.i);
-  if (r) { S.view = { t: 'airport', i: x.i }; S.stack = []; selectRoute(r.i); } else selectAirport(x.i);
+  if (!y) { selectAirport(x.i); return; }
+  S.view = { t: 'airport', i: x.i }; S.stack = [];
+  tripTo(y.i);
 }
 
 // ---------------------------------------------------------------- panel and map controls
@@ -838,6 +985,7 @@ function setCollapsed(c) {
   store('flights.panel', c ? 'closed' : 'open');
   $('#app').classList.toggle('collapsed', c);
   $('#reopen').hidden = !c;
+  if (!c) grow();
   if (map) map.easeTo({ padding: panelPadding(), duration: 400 });   // re-center on the space the panel leaves
 }
 
@@ -848,13 +996,18 @@ body.addEventListener('click', e => {
   else if (t.dataset.route !== undefined) selectRoute(+t.dataset.route);
   else if (t.dataset.airport !== undefined) openAirport(+t.dataset.airport);
   else if (t.dataset.airline !== undefined) selectAirline(+t.dataset.airline);
-  else if (t.dataset.only !== undefined) go({ t: 'airport', i: S.view.i, al: +t.dataset.only }, { fly: false });
+  else if (t.dataset.only !== undefined) go(+t.dataset.only === S.view.al ? { t: 'airport', i: S.view.i } : { t: 'airport', i: S.view.i, al: +t.dataset.only }, { fly: false });
+  else if (t.hasAttribute('data-alopen')) {
+    S.alOpen = !S.alOpen;
+    t.setAttribute('aria-expanded', String(S.alOpen));
+    $('#alpanel').hidden = !S.alOpen;
+  }
   else if (t.hasAttribute('data-unfilter')) go({ t: 'airport', i: S.view.i }, { fly: false });
   else if (t.dataset.tab) { S.tab = t.dataset.tab; store('flights.tab', S.tab); render(); }
   else if (t.dataset.reach !== undefined) { S.reach = t.dataset.reach === '1'; setHover(null); render(); showSelection(); }
 });
 body.addEventListener('mouseover', e => {
-  const t = e.target.closest('.row[data-route]');
+  const t = e.target.closest('[data-route]');
   setHover(t ? +t.dataset.route : null);
   const b = e.target.closest('.reach [data-band]');
   spotlightBand(b ? +b.dataset.band : null);
@@ -907,27 +1060,31 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   if (map && map.getLayer('routes')) { applyTheme(); if (S.reach && viewIs('airport')) render(); }
 });
 
-// map hover and click: airports first; routes only those in the current view (in the overview
-// there are far too many under the cursor for hovering them to mean anything)
+// map hover and click. With a view open, what it shows comes first: its airports, then its routes,
+// and only then the faded airports around them. In the overview, airports only (there are far too
+// many routes under the cursor for pointing at one to mean anything).
 const tip = $('#tip');
 function pick(point) {
   const box = (r) => [[point.x - r, point.y - r], [point.x + r, point.y + r]];
-  const layers = selecting() ? ['focus-sel', 'focus-dots', 'reach', 'airports'] : ['airports'];
-  if (map.getZoom() >= 3.5 && map.getLayer('others')) layers.push('others');
-  const air = map.queryRenderedFeatures(box(7), { layers });
-  if (air.length) {
-    const rank = f => (f.layer.id.startsWith('focus') ? 1e12 : 0) + f.properties.p;
-    air.sort((p, q) => rank(q) - rank(p));
-    return { airport: air[0].properties.i };
+  const busiest = (features) => features.sort((p, q) => q.properties.p - p.properties.p)[0].properties.i;
+  // the airport nearest the cursor (the busier one when they're within a pixel or two)
+  const nearest = (features) => {
+    const gap = f => { const q = map.project(f.geometry.coordinates); return Math.hypot(q.x - point.x, q.y - point.y); };
+    return features.map(f => [Math.round(gap(f) / 2) - Math.log10(1 + f.properties.p) / 100, f.properties.i]).sort((p, q) => p[0] - q[0])[0][1];
+  };
+  const others = map.getZoom() >= 3.5 && map.getLayer('others') ? ['others'] : [];
+  if (!selecting()) {
+    const air = map.queryRenderedFeatures(box(7), { layers: ['airports', ...others] });
+    return air.length ? { airport: nearest(air) } : {};
   }
-  if (selecting() && S.lines) {
+  const shown = map.queryRenderedFeatures(box(6), { layers: S.reach ? ['focus-sel', 'focus-dots', 'reach'] : ['focus-sel', 'focus-dots'] });
+  if (shown.length) return { airport: nearest(shown) };
+  if (S.lines) {
     const lines = map.queryRenderedFeatures(box(5), { layers: ['focus'] });
-    if (lines.length) {
-      lines.sort((p, q) => q.properties.p - p.properties.p);
-      return { route: lines[0].properties.i };
-    }
+    if (lines.length) return { route: busiest(lines) };
   }
-  return {};
+  const air = map.queryRenderedFeatures(box(7), { layers: ['airports', ...others] });
+  return air.length ? { airport: nearest(air) } : {};
 }
 let tipKey = null;
 function showTip(point, key, html) {
@@ -935,6 +1092,11 @@ function showTip(point, key, html) {
   if (key !== tipKey) { tip.innerHTML = html(); tipKey = key; }
   tip.style.left = point.x + 'px'; tip.style.top = point.y + 'px';
   tip.classList.add('show');
+}
+// with an airport open, pointing at another says how to get the way between them
+function shiftHint(x) {
+  const a = anchor();
+  return a === null || a === x.i || x.other || A[a].other ? '' : `<small>Shift-click: ${esc(A[a].code)} to ${esc(x.code)}</small>`;
 }
 function hoverAt(point) {
   const hit = pick(point);
@@ -955,7 +1117,7 @@ function hoverAt(point) {
         text += (leg.route !== undefined ? ' → ' : ' ⇢ ') + esc(A[at].code);
       }
       const road = legs.some(l => l.road !== undefined);
-      showTip(point, 'p' + x.i, () => `<b>${esc(x.code)}</b> ${esc(x.name)}<br><span>${flightsLabel(reach.dist[x.i])}: ${text}${road ? '<br>⇢ by road or ferry' : ''}</span>`);
+      showTip(point, 'p' + x.i, () => `<b>${esc(x.code)}</b> ${esc(x.name)}<br><span>${flightsLabel(reach.dist[x.i])}: ${text}${road ? '<br>⇢ by road or ferry' : ''}</span>${shiftHint(x)}`);
       return;
     }
     if (spot && spot[0] === 'p') spotlightPath(null);
@@ -963,7 +1125,7 @@ function hoverAt(point) {
     showTip(point, 'a' + x.i, () => x.other
       ? `<b>${esc(x.code)}</b> <i>${esc(x.name)}</i><br><span>${esc(place(x))} · no airline flights</span>`
       : `<b>${esc(x.code)}</b> ${esc(x.name)}<br><span>${esc(place(x))} · ${fmtPax(x.pax)} passengers · ${x.routes.length} routes${
-          reach && reach.dist[x.i] === -1 ? ' · can’t be reached from ' + esc(A[S.view.i].code) : ''}</span>`);
+          reach && reach.dist[x.i] === -1 ? ' · can’t be reached from ' + esc(A[S.view.i].code) : ''}</span>${shiftHint(x)}`);
   } else if (hit.route !== undefined) {
     const r = R[hit.route];
     setHover(r.i);
@@ -998,6 +1160,7 @@ function initMap() {
     attributionControl: false, dragRotate: false, pitchWithRotate: false, renderWorldCopies: true,
   });
   map.touchZoomRotate.disableRotation();
+  map.boxZoom.disable();   // shift-click picks the second airport of a trip
   map.on('load', () => {
     map.jumpTo(HOME());
     addFlightLayers(pal());
@@ -1018,7 +1181,7 @@ function initMap() {
   map.on('click', e => {
     const hit = pick(e.point);
     showTip(null, null);
-    if (hit.airport !== undefined) openAirport(hit.airport, { fly: false });
+    if (hit.airport !== undefined) e.originalEvent.shiftKey ? tripTo(hit.airport) : openAirport(hit.airport, { fly: false });
     else if (hit.route !== undefined) selectRoute(hit.route, { fly: false });
     else if (selecting()) go(HOMEVIEW, { fly: false });
   });

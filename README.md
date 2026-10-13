@@ -7,8 +7,11 @@ fly the route in a year.
   and (under *Flights away*) how many flights it takes to reach every other airport. Hover an
   airport to see the way there.
 - Click a route for its passengers, flight time, distance, airlines and source.
+- With an airport open, shift-click another for the way between them: the nonstop route if there
+  is one, else the fewest flights there, stop by stop.
 - Click an airline for its whole network (every other route goes away); pick an airport in it, or
   an airline at an airport, to see just that airline's routes from there.
+- The overview lists every airline, airport and route, biggest first, loading more as you scroll.
 - The toolbar on the map turns the flight paths off, filters them, and switches between a globe
   and a flat map. The panel folds away for a full-screen map, and zooming in shows the streets
   around each airport.
@@ -22,8 +25,8 @@ OpenFreeMap.
 python3 -m http.server 8000      # from the repo root, then open http://localhost:8000
 ```
 
-Links can point at an airport, a route, an airline, or an airline at an airport: `#MIA`, `#MIA-CCS`,
-`#airline/Delta_Air_Lines`, `#airline/Delta_Air_Lines/ATL`.
+Links can point at an airport, a route (or the way between two airports), an airline, or an airline
+at an airport: `#MIA`, `#MIA-CCS`, `#airline/Delta_Air_Lines`, `#airline/Delta_Air_Lines/ATL`.
 
 ## Which routes
 
@@ -36,6 +39,9 @@ destinations" table, kept current by editors, with notes such as *begins 1 Novem
 - *resumes* a future date: left out unless the route is seasonal or the official counts show it
   flying this year
 - *Dubai (via Muscat)*: not a nonstop route, so left out
+- a destination is matched to its IATA code through its article. Wikidata now and then gives a
+  small field another airport's code (an Indonesian airstrip with La Crosse's LSE), so a code is
+  only taken when OurAirports agrees on the airport
 - listed only as *Charter*: left out unless the official counts show it flying regularly. That
   drops contract, mining and military charters (Wake Island–Travis Air Force Base) and keeps holiday
   charters the statistics count
@@ -92,14 +98,15 @@ marked with ≈ in the panel.
 airline's Wikipedia article (so *Air Algérie* and *Air Algerie* are one airline). Tables list the
 brand that sells the flight (*American Eagle*, *Delta Connection*), not the regional airline that
 operates it. Logos (`pipeline/fetch_logos.py`) come from Wikidata's logo property on Wikimedia
-Commons; failing that, from the logo the airline's English Wikipedia article shows (often one of
-Wikipedia's own non-free files, used there and here to identify the airline); failing that, for a
+Commons; failing that, from the logo in the infobox of the airline's English Wikipedia article
+(often one of Wikipedia's own non-free files, used there and here to identify the airline); failing that, for a
 brand like American Eagle, from its parent airline. Airlines without one get their initials.
 
 **Flights away** counts the fewest flights from an airport to every other. A dozen small networks no
 flight joins to the rest (the Aran Islands, Ketchikan's floatplanes, Shetland's inter-island
 flights) are linked to the nearest airport by a road or ferry trip that counts as free, so every
-airport can be reached.
+airport can be reached. Of the ways with the fewest flights, the one shown is the shortest, with
+thinly flown routes counted a little longer so that it connects where people actually connect.
 
 **Flight times** are typical block times for the distance, `45 min + 0.0703 min/km`, fitted to
 schedules from short hops to the longest flights; they're not from timetables.
