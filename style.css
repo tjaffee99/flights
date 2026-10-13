@@ -40,7 +40,7 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .pbtn{flex:none;width:36px;height:36px;border:0;border-radius:10px;background:var(--field);color:var(--ink2);display:grid;place-items:center;cursor:pointer}
 .pbtn:hover{color:var(--ink)}
 .pbtn svg{width:17px;height:17px}
-.pbtn:focus-visible,.reopen:focus-visible,.mapbar button:focus-visible,.al:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pbtn:focus-visible,.reopen:focus-visible,.al:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #app.collapsed #panel{display:none}
 .reopen{position:absolute;left:16px;top:calc(16px + env(safe-area-inset-top,0px));z-index:5;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 11px;border:1px solid var(--panel-edge);border-radius:12px;background:var(--panel);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);box-shadow:var(--shadow);color:var(--ink);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .reopen[hidden]{display:none}
@@ -143,7 +143,7 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .chips{display:flex;flex-wrap:wrap;gap:6px;padding:2px 16px 4px}
 .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:14px;border:0;background:var(--chip);color:var(--ink);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap}
 .chip[aria-pressed="false"]{color:var(--ink3)}
-.chip:focus-visible,.row:focus-visible,.back:focus-visible,.seg button:focus-visible,.ctl button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip:focus-visible,.row:focus-visible,.back:focus-visible,.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .seg{display:inline-flex;background:var(--field);border-radius:8px;padding:2px;gap:2px}
 .seg button{border:0;background:none;color:var(--ink2);font:inherit;font-size:12px;font-weight:500;padding:4px 9px;border-radius:6px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--panel-solid);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -174,36 +174,30 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .dhead h2 a.wiki:hover{text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:1.5px;text-underline-offset:.15em}
 .dhead h2 a.wiki:hover svg{color:var(--accent)}
 .dhead h2 a.wiki:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
-#lines[aria-pressed="false"]{color:var(--ink3)}
-#lines[aria-pressed="false"] svg{opacity:.5}
 
-/* ---------- map toolbar ---------- */
-.mapbar-wrap{position:absolute;left:388px;right:72px;bottom:calc(30px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;pointer-events:none;z-index:4}
-#app.collapsed .mapbar-wrap{left:16px}
-.mapbar{pointer-events:auto;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;padding:6px 8px;background:var(--panel);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);border:1px solid var(--panel-edge);border-radius:14px;box-shadow:var(--shadow);font-size:12.5px}
-.mapbar .chipset{display:inline-flex;gap:6px}
-.mapbar .chip{height:26px;padding:0 10px}
-.mapbar.off .needs-lines{opacity:.4;pointer-events:none}
+/* ---------- map options, under the search bar ---------- */
+#optsbtn[aria-expanded="true"]{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.mapopts{display:flex;flex-direction:column;gap:2px;padding:4px 2px 0}
+.mapopts[hidden]{display:none}
+.orow{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px;font-size:13px}
+.orow>span:first-child{color:var(--ink2)}
+.orow .chipset{display:inline-flex;gap:6px}
+.orow .switch{padding:0}
+.mapopts.off .needs-lines{opacity:.4;pointer-events:none}
+.credits{margin-top:4px;padding-top:9px;border-top:1px solid var(--sep);font-size:11px;line-height:1.5;color:var(--ink3);text-wrap:pretty}
+.credits a{color:var(--ink2)}
 .switch{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 6px 0 4px;border:0;background:none;color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
-.switch i{position:relative;width:30px;height:18px;border-radius:9px;background:var(--field);transition:background .15s;flex:none}
-.switch i::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:7px;background:var(--panel-solid);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.switch i{position:relative;width:34px;height:20px;border-radius:10px;background:var(--field);transition:background .15s;flex:none}
+.switch i::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:8px;background:var(--panel-solid);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
 .switch[aria-checked="true"] i{background:var(--accent)}
-.switch[aria-checked="true"] i::after{transform:translateX(12px)}
+.switch[aria-checked="true"] i::after{transform:translateX(14px)}
+.switch:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:10px}
 
-/* ---------- map controls ---------- */
-.ctl{position:absolute;right:16px;top:calc(16px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:10px;z-index:4}
-.ctl .grp{display:flex;flex-direction:column;background:var(--panel);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--panel-edge);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
-.ctl button{width:40px;height:40px;border:0;background:none;color:var(--ink);cursor:pointer;display:grid;place-items:center}
-.ctl button+button{border-top:1px solid var(--sep)}
-.ctl button:hover{background:var(--hover)}
-.ctl svg{width:16px;height:16px}
 #tip{position:absolute;z-index:6;pointer-events:none;background:var(--panel-solid);color:var(--ink);border:1px solid var(--panel-edge);border-radius:8px;box-shadow:var(--shadow);padding:6px 9px;font-size:12.5px;line-height:1.35;max-width:260px;opacity:0;transform:translate(-50%,calc(-100% - 12px));transition:opacity .12s}
 #tip.show{opacity:1}
 #tip b{font-weight:600}
 #tip span{color:var(--ink2)}
 #tip small{display:block;margin-top:3px;font-size:11px;color:var(--ink3)}
-.attr{position:absolute;right:8px;bottom:calc(6px + env(safe-area-inset-bottom,0px));font-size:10.5px;color:var(--ink2);background:var(--panel);padding:2px 7px;border-radius:6px;z-index:3}
-.attr a{color:inherit}
 #loading{position:absolute;inset:0;display:grid;place-items:center;z-index:10;background:var(--land);transition:opacity .4s}
 #loading.done{opacity:0;pointer-events:none}
 #loading div{font-size:14px;color:var(--ink2);display:flex;flex-direction:column;align-items:center;gap:12px}
@@ -212,20 +206,15 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 @keyframes ld{0%{transform:translateX(-100%)}100%{transform:translateX(330%)}}
 @media (prefers-reduced-motion:reduce){#loading .bar i{animation:none;width:100%}}
 
-/* ---------- phone: bottom sheet ---------- */
+/* ---------- phone: a sheet you drag between the search bar, half the screen and nearly all of it ---------- */
 @media (max-width:640px){
-  #panel{left:0;right:0;top:auto;bottom:0;width:auto;max-width:none;border-radius:16px 16px 0 0;max-height:52%;padding-bottom:env(safe-area-inset-bottom,0px);border-left:0;border-right:0;border-bottom:0}
-  #panel.min{max-height:128px}
-  #panel.min #body{overflow:hidden}
-  .grip{display:block;width:100%;height:18px;border:0;background:none;cursor:pointer;padding:0;flex:none}
-  .grip::before{content:"";display:block;width:36px;height:5px;border-radius:3px;background:var(--ink3);opacity:.5;margin:7px auto 0}
+  #panel{left:0;right:0;top:auto;bottom:0;width:auto;max-width:none;height:50%;max-height:none;border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom,0px);border-left:0;border-right:0;border-bottom:0;transition:height .32s cubic-bezier(.2,.8,.2,1)}
+  #panel.dragging{transition:none}
+  #panel[data-sheet="peek"] #body{overflow:hidden}
+  #app.collapsed #panel{display:flex}
+  #collapse,.reopen{display:none}
+  .grip{display:block;width:100%;height:22px;border:0;background:none;cursor:grab;padding:0;flex:none;touch-action:none}
+  .grip::before{content:"";display:block;width:36px;height:5px;border-radius:3px;background:var(--ink3);opacity:.5;margin:8px auto 0}
   .phead{padding-top:0}
-  .attr{bottom:auto;top:calc(56px + env(safe-area-inset-top,0px));left:8px;right:auto}
-  .mapbar-wrap,#app.collapsed .mapbar-wrap{left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));bottom:auto;justify-content:flex-start}
-  .mapbar{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none;justify-content:flex-start}
-  .mapbar::-webkit-scrollbar{display:none}
-  .reopen{top:auto;bottom:calc(16px + env(safe-area-inset-bottom,0px))}
-  .attr .wide{display:none}
-  .ctl{top:auto;bottom:calc(52% + 12px)}
   #tip{display:none}
 }

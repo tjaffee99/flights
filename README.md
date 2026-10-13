@@ -12,9 +12,10 @@ fly the route in a year.
 - Click an airline for its whole network (every other route goes away); pick an airport in it, or
   an airline at an airport, to see just that airline's routes from there.
 - The overview lists every airline, airport and route, biggest first, loading more as you scroll.
-- The toolbar on the map turns the flight paths off, filters them, and switches between a globe
-  and a flat map. The panel folds away for a full-screen map, and zooming in shows the streets
-  around each airport.
+- The options button beside the search bar turns the flight paths off, filters them, switches
+  between a globe and a flat map, and lists the sources. The panel folds away for a full-screen map
+  (on a phone it's a sheet you drag up and down), and zooming in shows the streets around each
+  airport.
 
 It's a static site (`index.html`, `app.js`, `style.css`, MapLibre GL in `vendor/`) that reads
 `data/flights.json` (and `data/others.json` after the map appears), both built by the scripts in
