@@ -66,12 +66,9 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .row .n small{display:block;font-size:11px;color:var(--ink3)}
 .row .bar{position:absolute;left:16px;bottom:2px;height:3px;max-width:calc(100% - 32px);background:var(--hot);opacity:.55;border-radius:2px;pointer-events:none}
 .row>*:not(.bar){position:relative}
-/* airport codes: letters on the flaps of a departures board */
-.code{display:inline-flex;gap:1.5px;flex:none;font:700 12px/1 "DIN Alternate","Bahnschrift","D-DIN","Barlow Semi Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-variant-numeric:tabular-nums}
-.code i{display:grid;place-items:center;width:13px;height:20px;border-radius:2.5px;font-style:normal;color:#F6F2E6;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 1px 1.5px rgba(0,0,0,.22);
-  background:linear-gradient(#383C44 calc(50% - .5px),#15171A calc(50% - .5px) calc(50% + .5px),#2B2E34 calc(50% + .5px))}   /* the split between flaps runs behind the letter */
-.code.big{gap:2.5px;font-size:21px}
-.code.big i{width:24px;height:35px;border-radius:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 1.5px 3px rgba(0,0,0,.25)}
+/* airport codes: just the letters, tracked out; big and in the highlight color at the head of a view */
+.code{flex:none;width:34px;font-size:12.5px;font-weight:700;line-height:1;letter-spacing:.07em;color:var(--ink2);font-variant-numeric:tabular-nums}
+.code.big{width:auto;font-size:30px;font-weight:800;letter-spacing:.03em;color:var(--hot)}
 .est{color:var(--ink3);font-weight:400}
 /* airline logos sit on a white tile so dark marks show in dark mode too */
 .logo{display:inline-block;flex:none;height:16px;width:auto;max-width:52px;object-fit:contain;background:#fff;border-radius:4px;padding:2px 3px;box-shadow:0 0 0 1px var(--panel-edge)}
@@ -117,8 +114,9 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .trip .leg{min-height:44px;font-size:13px;color:var(--ink2)}
 .trip .leg b{color:var(--ink);font-weight:600}
 .trip .leg .t span{display:block;font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trip .rail{flex:none;align-self:stretch;width:43px;display:flex;justify-content:center;margin:-5px 0}
-.trip .rail::before{content:"";width:3px;border-radius:2px;background:var(--hot)}
+.trip .rail{flex:none;align-self:stretch;width:34px;display:flex;justify-content:center;margin:-5px 0}
+.trip .rail::before{content:"";width:2px;border-radius:1px;background:var(--hot)}
+.trip .code{text-align:center}
 .trip .leg.road .rail::before{width:0;border-left:3px dotted var(--ink3);background:none}
 .trip .stop:focus-visible,.trip .leg:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .reach{display:grid;gap:2px;padding:4px 10px 4px;font-size:13px}
@@ -139,7 +137,7 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .src{padding:4px 16px 8px;font-size:11.5px;line-height:1.4;color:var(--ink3);text-wrap:pretty}
 /* airports without airline flights: grey and italic */
 .row.other .t b,.dhead.other h2{font-style:italic;font-weight:500;color:var(--ink2)}
-.row.other .code i,.dhead.other .code i{color:var(--ink3);background:var(--chip);box-shadow:none}
+.row.other .code,.dhead.other .code{color:var(--ink3);font-weight:500;font-style:italic}
 .row.other .n small{color:var(--ink3);line-height:1.2}
 #tip i{color:var(--ink2)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;padding:2px 16px 4px}
@@ -165,7 +163,7 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .dhead h2{margin:0;font-size:19px;line-height:1.2;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
 .dhead .sub{font-size:14px;color:var(--ink2);margin-top:2px}
 .route-ends{display:flex;align-items:center;gap:8px;padding:10px 16px 4px}
-.route-ends .arrow{color:var(--ink3);font-size:18px;padding:0 2px}
+.route-ends .arrow{color:var(--ink3);font-size:20px;padding:0 4px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;padding:6px 16px;font-size:13.5px}
 .kv dt{color:var(--ink2)}
 .kv dd{margin:0;font-variant-numeric:tabular-nums}

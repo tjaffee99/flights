@@ -617,8 +617,7 @@ function backLabel() {
 }
 const backButton = () => `<button class="back" data-back>${BACK}${esc(backLabel())}</button>`;
 
-// an airport code as letters on a departures board
-const codeTag = (code, cls = '') => `<span class="code${cls ? ' ' + cls : ''}" aria-label="${esc(code)}">${[...code].map(c => `<i aria-hidden="true">${esc(c)}</i>`).join('')}</span>`;
+const codeTag = (code, cls = '') => `<span class="code${cls ? ' ' + cls : ''}">${esc(code)}</span>`;
 
 // long lists show a screenful, then more as they scroll into view, all the way to the end
 const lists = new Map();
