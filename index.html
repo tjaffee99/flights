@@ -22,24 +22,28 @@
   <aside id="panel" aria-label="Airports and routes">
     <button class="grip" id="grip" aria-label="Expand or collapse panel"></button>
     <div class="phead" id="phead">
-      <div class="search">
+      <div class="search-row"><div class="search">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
         <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Search airports, cities, codes" aria-label="Search airports by name, city, country or code">
         <button id="qclear" aria-label="Clear search">✕</button>
       </div>
+      <button class="pbtn" id="collapse" aria-label="Hide panel" title="Hide panel"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="2.5" width="12.4" height="11" rx="2"/><path d="M6 2.5v11M10.5 6 8.5 8l2 2"/></svg></button></div>
     </div>
     <div id="body"></div>
   </aside>
+  <button class="reopen" id="reopen" hidden aria-label="Show panel"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="2.5" width="12.4" height="11" rx="2"/><path d="M6 2.5v11M8.5 6l2 2-2 2"/></svg>Flight Atlas</button>
+  <div class="mapbar-wrap"><div class="mapbar" id="bar" role="toolbar" aria-label="Map options">
+    <button class="switch" id="lines" role="switch" aria-checked="true"><i aria-hidden="true"></i>Flight paths</button>
+    <span class="seg needs-lines" role="group" aria-label="Busiest routes only"><button data-min="0" aria-pressed="true">All</button><button data-min="100000" aria-pressed="false">100K+</button><button data-min="1000000" aria-pressed="false">1M+</button></span>
+    <span class="chipset needs-lines" role="group" aria-label="Kinds of route"><button class="chip" id="cdom" aria-pressed="true">Domestic</button><button class="chip" id="cintl" aria-pressed="true">International</button></span>
+    <span class="seg" role="group" aria-label="Map projection"><button data-proj="globe" aria-pressed="true">Globe</button><button data-proj="mercator" aria-pressed="false">Flat</button></span>
+  </div></div>
   <div class="ctl">
-    <div class="grp">
-      <button id="lines" aria-pressed="true" aria-label="Hide flight paths" title="Hide flight paths"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 12.5C4 6 10 4 14 6.5"/><path d="M2 8.5c3.5-3 8-3 12 1" opacity=".55"/><circle cx="2" cy="12.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="14" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg></button>
-    </div>
     <div class="grp">
       <button id="zin" aria-label="Zoom in"><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
       <button id="zout" aria-label="Zoom out"><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h10"/></svg></button>
     </div>
     <div class="grp">
-      <button id="proj" aria-label="Switch to a flat map" title="Flat map"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="M2 8h12M8 3.5v9"/></svg></button>
       <button id="home" aria-label="Show the whole world"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c-2.2 2.4-2.2 9.6 0 12M8 2c2.2 2.4 2.2 9.6 0 12"/></svg></button>
     </div>
   </div>

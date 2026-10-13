@@ -36,6 +36,8 @@ import csv
 import datetime as dt
 import json
 import math
+import re
+import shutil
 from collections import defaultdict
 from pathlib import Path
 
@@ -57,10 +59,15 @@ NATIONAL = {'us_bts_t100': {'US', 'PR', 'VI', 'GU', 'AS', 'MP'}, 'uk_caa': {'GB'
 THROUGH = {'au_bitre_intl'}
 REPORTED = 'reported'         # source key for counts from Wikipedia's busiest-routes tables
 ESTIMATE = 'estimate'
-MIN_PASSENGERS = 500          # measured routes below this a year are noise unless Wikipedia lists them
+# A counted route Wikipedia doesn't list must look like a schedule, not charters, diversions or
+# repositioning flights: about weekly or more in at least one direction, or (for sources without
+# flight counts) 5,000+ passengers a year.
+MIN_DEPARTURES = 40
+MIN_PASSENGERS = 5000
 RECENT_MONTHS = 2             # a measured route must have flown in the last N months of its data
 STALE_MONTHS = 9              # data ending longer ago than this needs Wikipedia to confirm a route still flies
-USABLE_YEARS = {2019} | set(range(2023, 2100))   # yearly figures to use (not the pandemic years)
+USABLE_YEARS = {2019} | set(range(2023, 2100))
+airlines_seen = {}            # airline key -> the name most listings give it (filled by load_wikipedia)   # yearly figures to use (not the pandemic years)
 
 
 def month_index(ym):
@@ -114,6 +121,7 @@ def load_wikipedia(airports):
     infobox totals, and the airports whose pages list routes. Also sets each airport's 'label', the
     name other airports' route tables most often give it ("Caracas", "Tokyo–Haneda")."""
     labels = defaultdict(lambda: defaultdict(int))
+    airline_names = defaultdict(lambda: defaultdict(int))   # airline key -> names its listings use
     pairs = {}
     stopped = set()   # pairs Wikipedia lists only as suspended, ended or not started yet
     resuming = set()  # pairs on a break, flying again on a future date
@@ -135,7 +143,12 @@ def load_wikipedia(airports):
                 labels[d][row['dest_name'].strip()] += 1
             p = pairs.setdefault(key, {'by': set(), 'airlines': set(), 'modes': set()})
             p['by'].add(o)
-            p['airlines'].add(row['airline'].strip())
+            # an airline is its Wikipedia article where the table links one, else its name
+            name = re.sub(r'\s*\[\s*\d+\s*\]', '', row['airline']).strip()
+            title = row.get('airline_title') or ''
+            airline = title if title and 'redlink=1' not in title else 'name:' + name
+            airline_names[airline][name] += 1
+            p['airlines'].add(airline)
             p['modes'].add(row['mode'])
     resuming -= set(pairs)
     stopped -= set(pairs) | resuming
@@ -148,6 +161,7 @@ def load_wikipedia(airports):
                 totals[row['iata']] = (int(row['passengers']), int(row['passengers_year']))
             if int(row['tables'] or 0) > 0:
                 pages.add(row['iata'])
+    airlines_seen.update({k: max(v.items(), key=lambda kv: kv[1])[0] for k, v in airline_names.items()})
     return pairs, stopped, resuming, listings, totals, pages
 
 
@@ -180,9 +194,12 @@ def load_measured(airports):
             first = min((month_index(r['first_month']) for r in rows if r['first_month']), default=start)
             last = max((month_index(r['last_month']) for r in rows if r['last_month']), default=end)
             months = max(int(r['months_with_traffic'] or 0) for r in rows) or end - start + 1
+            deps = max((float(r['departures']) for r in rows if r.get('departures')), default=None)
             key = tuple(sorted((o, d)))
             m = merged.setdefault(key, {'source': source, 'ab': 0.0, 'ba': 0.0, 'first': first, 'last': last,
-                                        'months': months, 'start': start, 'end': end})
+                                        'months': months, 'start': start, 'end': end, 'deps': None})
+            if deps is not None:
+                m['deps'] = max(m['deps'] or 0, deps)
             if not directional:
                 m['ab'] += pax / 2
                 m['ba'] += pax / 2
@@ -404,8 +421,9 @@ def main():
     dropped = defaultdict(int)
     for key, m in measured.items():
         pax = m['ab'] + m['ba']
-        if pax < MIN_PASSENGERS and key not in wiki:
-            dropped['too small'] += 1
+        regular = m['deps'] >= MIN_DEPARTURES if m['deps'] is not None else pax >= MIN_PASSENGERS
+        if not regular and key not in wiki:
+            dropped['no regular schedule'] += 1
             continue
         recent = m['last'] >= m['end'] - (RECENT_MONTHS - 1)
         if key in stopped and key not in wiki:
@@ -426,8 +444,11 @@ def main():
             continue
         scale, months = 1.0, 0
         seasonal = key in wiki and wiki[key]['modes'] <= {'seasonal', 'seasonal_charter'}
-        if recent and m['first'] > m['start'] + 1 and not seasonal and m['months'] >= 2:
-            scale, months = 12 / m['months'], m['months']   # started (or restarted) partway through
+        # started (or restarted) partway through: scale up to a year; one month is enough when
+        # Wikipedia confirms it's a new route that began in the data's last month
+        just_started = key in wiki and m['months'] == 1 and m['first'] == m['end']
+        if recent and m['first'] > m['start'] + 1 and not seasonal and (m['months'] >= 2 or just_started):
+            scale, months = 12 / m['months'], m['months']
         routes[key] = {'ab': m['ab'] * scale, 'ba': m['ba'] * scale, 'source': m['source'], 'months': months, 'year': 0}
     print(f'  kept {len(routes)} counted routes; dropped {dict(dropped)}')
 
@@ -493,12 +514,36 @@ def wiki_column(codes, airports, titles):
     return ['' if titles.get(x, '') == airports[x]['name'] else titles.get(x, '-') for x in codes]
 
 
+def shrink_logo(src, dest):
+    """A copy of a logo at most 240x72 (twice the size it's shown at), as a small palette PNG."""
+    from PIL import Image
+    with Image.open(src) as image:
+        image = image.convert('RGBA')
+        image.thumbnail((240, 72), Image.LANCZOS)
+        image.quantize(colors=96, method=Image.Quantize.FASTOCTREE).save(dest, optimize=True)
+
+
 def write(routes, wiki, airports, countries, measured_sources, today, overrides):
     titles = wikipedia_titles()
     used = sorted({x for key in routes for x in key})
     index = {x: i for i, x in enumerate(used)}
-    airline_names = sorted({a for k, p in wiki.items() if k in routes for a in p['airlines']})
-    airline_index = {a: i for i, a in enumerate(airline_names)}
+    # airlines: display name, Wikipedia title ('' when it's the name, '-' when none), logo file
+    keys = sorted({a for k, p in wiki.items() if k in routes for a in p['airlines']}, key=lambda a: airlines_seen[a].lower())
+    airline_index = {a: i for i, a in enumerate(keys)}
+    logos = json.loads((BUILD / 'airline_logos.json').read_text()) if (BUILD / 'airline_logos.json').exists() else {}
+    logo_dir = OUT.parent / 'logos'
+    if logo_dir.exists():
+        shutil.rmtree(logo_dir)
+    logo_dir.mkdir(parents=True)
+    airline_logo = []
+    for a in keys:
+        file = logos.get(a, '')
+        if file and (CACHE / 'logos' / file).exists():
+            shrink_logo(CACHE / 'logos' / file, logo_dir / file)
+        else:
+            file = ''
+        airline_logo.append(file)
+    airline_wiki = ['-' if a.startswith('name:') else '' if a == airlines_seen[a] else a for a in keys]
 
     source_list = [{'id': 0, 'key': ESTIMATE, 'name': 'Estimate', 'short': 'estimates'}]
     for s in sorted(measured_sources.get('sources', []), key=lambda s: SOURCE_PRIORITY.index(s['id']) if s['id'] in SOURCE_PRIORITY else 99):
@@ -533,7 +578,9 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides)
         'about': ABOUT,
         'sources': source_list,
         'countries': {c: countries.get(c, c) for c in sorted({airports[x]['cc'] for x in used})},
-        'airlines': airline_names,
+        'airlines': [airlines_seen[a] for a in keys],
+        'airline_wiki': airline_wiki,
+        'airline_logo': airline_logo,
         'airports': {
             'code': used,
             'name': [airports[x]['name'] for x in used],

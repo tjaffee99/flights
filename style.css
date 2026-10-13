@@ -35,7 +35,16 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .grip{display:none}
 .phead{padding:12px 12px 8px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid transparent}
 .phead.scrolled{border-bottom-color:var(--sep)}
-.search{position:relative;display:flex;align-items:center}
+.search-row{display:flex;gap:8px;align-items:center}
+.search{position:relative;display:flex;align-items:center;flex:1;min-width:0}
+.pbtn{flex:none;width:36px;height:36px;border:0;border-radius:10px;background:var(--field);color:var(--ink2);display:grid;place-items:center;cursor:pointer}
+.pbtn:hover{color:var(--ink)}
+.pbtn svg{width:17px;height:17px}
+.pbtn:focus-visible,.reopen:focus-visible,.mapbar button:focus-visible,.al:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app.collapsed #panel{display:none}
+.reopen{position:absolute;left:16px;top:calc(16px + env(safe-area-inset-top,0px));z-index:5;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 11px;border:1px solid var(--panel-edge);border-radius:12px;background:var(--panel);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);box-shadow:var(--shadow);color:var(--ink);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.reopen[hidden]{display:none}
+.reopen svg{width:17px;height:17px;color:var(--ink2)}
 .search svg{position:absolute;left:9px;width:15px;height:15px;color:var(--ink3);pointer-events:none}
 #q{width:100%;box-sizing:border-box;height:36px;border:0;border-radius:10px;background:var(--field);color:var(--ink);font:inherit;font-size:15px;padding:0 32px 0 31px;outline:none}
 #q::placeholder{color:var(--ink3)}
@@ -60,6 +69,25 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .code{display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:22px;padding:0 5px;box-sizing:border-box;border-radius:6px;background:var(--chip);color:var(--ink);font:600 12px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.02em;flex:none}
 .code.big{min-width:56px;height:34px;font-size:16px;border-radius:9px}
 .est{color:var(--ink3);font-weight:400}
+/* airline logos sit on a white tile so dark marks show in dark mode too */
+.logo{display:inline-block;flex:none;height:16px;width:auto;max-width:52px;object-fit:contain;background:#fff;border-radius:4px;padding:2px 3px;box-shadow:0 0 0 1px var(--panel-edge)}
+.logo.none{display:inline-flex;align-items:center;justify-content:center;min-width:16px;padding:2px 4px;background:var(--chip);color:var(--ink2);font:700 9.5px/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;letter-spacing:.02em;box-shadow:none}
+.logo.row-logo{height:20px;max-width:44px}
+.logo.row-logo.none{min-width:34px;font-size:10.5px}
+.logo.big{height:34px;max-width:120px;padding:5px 7px;border-radius:8px}
+.logo.big.none{min-width:40px;font-size:15px}
+.als{display:flex;flex-wrap:wrap;gap:6px;padding:4px 16px 8px}
+.al{display:inline-flex;align-items:center;gap:6px;height:30px;max-width:100%;padding:0 10px 0 5px;border:0;border-radius:15px;background:var(--chip);color:var(--ink);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.al:hover{background:color-mix(in srgb,var(--chip) 80%,var(--ink) 8%)}
+.al span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al small{color:var(--ink3);font-size:11.5px;font-variant-numeric:tabular-nums}
+.dhead.airline{align-items:center}
+.reach{display:grid;gap:6px;padding:4px 16px 4px;font-size:13px}
+.reach div{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center}
+.reach i{width:12px;height:12px;border-radius:6px;box-shadow:0 0 0 1px var(--panel-edge)}
+.reach b{font-weight:600;font-variant-numeric:tabular-nums}
+.dir{padding:0 16px 4px;font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.src{padding:4px 16px 8px;font-size:11.5px;line-height:1.4;color:var(--ink3);text-wrap:pretty}
 /* airports without airline flights: grey and italic */
 .row.other .t b,.dhead.other h2{font-style:italic;font-weight:500;color:var(--ink2)}
 .row.other .code,.dhead.other .code{font-style:italic;color:var(--ink3);background:none;box-shadow:inset 0 0 0 1px var(--sep)}
@@ -102,6 +130,19 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 #lines[aria-pressed="false"]{color:var(--ink3)}
 #lines[aria-pressed="false"] svg{opacity:.5}
 
+/* ---------- map toolbar ---------- */
+.mapbar-wrap{position:absolute;left:388px;right:72px;bottom:calc(30px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;pointer-events:none;z-index:4}
+#app.collapsed .mapbar-wrap{left:16px}
+.mapbar{pointer-events:auto;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;padding:6px 8px;background:var(--panel);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);border:1px solid var(--panel-edge);border-radius:14px;box-shadow:var(--shadow);font-size:12.5px}
+.mapbar .chipset{display:inline-flex;gap:6px}
+.mapbar .chip{height:26px;padding:0 10px}
+.mapbar.off .needs-lines{opacity:.4;pointer-events:none}
+.switch{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 6px 0 4px;border:0;background:none;color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.switch i{position:relative;width:30px;height:18px;border-radius:9px;background:var(--field);transition:background .15s;flex:none}
+.switch i::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:7px;background:var(--panel-solid);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.switch[aria-checked="true"] i{background:var(--accent)}
+.switch[aria-checked="true"] i::after{transform:translateX(12px)}
+
 /* ---------- map controls ---------- */
 .ctl{position:absolute;right:16px;top:calc(16px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:10px;z-index:4}
 .ctl .grp{display:flex;flex-direction:column;background:var(--panel);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--panel-edge);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
@@ -131,7 +172,11 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
   .grip{display:block;width:100%;height:18px;border:0;background:none;cursor:pointer;padding:0;flex:none}
   .grip::before{content:"";display:block;width:36px;height:5px;border-radius:3px;background:var(--ink3);opacity:.5;margin:7px auto 0}
   .phead{padding-top:0}
-  .attr{bottom:auto;top:calc(8px + env(safe-area-inset-top,0px));left:8px;right:auto}
+  .attr{bottom:auto;top:calc(56px + env(safe-area-inset-top,0px));left:8px;right:auto}
+  .mapbar-wrap,#app.collapsed .mapbar-wrap{left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));bottom:auto;justify-content:flex-start}
+  .mapbar{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none;justify-content:flex-start}
+  .mapbar::-webkit-scrollbar{display:none}
+  .reopen{top:auto;bottom:calc(16px + env(safe-area-inset-bottom,0px))}
   .attr .wide{display:none}
   .ctl{top:auto;bottom:calc(52% + 12px)}
   #tip{display:none}

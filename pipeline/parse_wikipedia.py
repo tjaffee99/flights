@@ -56,6 +56,8 @@ def norm_title(title):
 
 def link_title(a):
     href = a.get('href', '')
+    if 'redlink=1' in href:   # a link to an article that doesn't exist yet
+        return None
     if '/wiki/' in href:
         return norm_title(href.split('/wiki/', 1)[1])
     if href.startswith('./'):
@@ -317,8 +319,10 @@ def main():
                 if len(cells) < 2:
                     continue
                 airline = cells[0].get_text(' ', strip=True)
+                links = [link_title(a) for a in clean(cells[0]).find_all('a')]
+                airline_title = next((t for t in links if t and ':' not in t.split(' ')[0]), '')
                 for title, display, mode, status, note in parse_destinations(cells[1], today):
-                    listings.append({'origin': iata, 'airline': airline, 'dest_title': title,
+                    listings.append({'origin': iata, 'airline': airline, 'airline_title': airline_title, 'dest_title': title,
                                      'dest_name': display, 'mode': mode, 'status': status, 'note': note})
         for block in soup.select('div.stat'):
             rows, year, one_way = parse_route_stats(block, today)
@@ -331,12 +335,15 @@ def main():
 
     unresolved = {l['dest_title'] for l in listings if l['dest_title'] not in title_to_iata}
     unresolved |= {t for row in stats for t in row['titles'] if t not in title_to_iata}
+    unresolved |= {l['airline_title'] for l in listings if l['airline_title']}
     redirects = resolve_redirects(unresolved, CACHE / 'redirects.json')
     missing = {}
     for listing in listings:
         title = listing['dest_title']
         dest = title_to_iata.get(title) or title_to_iata.get(norm_title(redirects.get(title, '')))
         listing['dest'] = dest or ''
+        if listing['airline_title']:   # the airline's article, redirects followed
+            listing['airline_title'] = redirects.get(listing['airline_title'], listing['airline_title'])
         if not dest:
             missing[title] = missing.get(title, 0) + 1
 
@@ -357,7 +364,7 @@ def main():
         writer.writerows(row for row in stats if row['dest'])
     print(f'{len(stats)} busiest-route rows, {sum(1 for r in stats if r["dest"])} resolved to an airport')
 
-    fields = ['origin', 'dest', 'airline', 'mode', 'status', 'note', 'dest_title', 'dest_name']
+    fields = ['origin', 'dest', 'airline', 'airline_title', 'mode', 'status', 'note', 'dest_title', 'dest_name']
     with open(BUILD / 'wiki_routes.csv', 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
         writer.writeheader()
