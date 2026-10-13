@@ -688,8 +688,7 @@ function overview() {
     const measured = R.reduce((s, r) => s + (isEst(r) ? 0 : r.pax), 0);
     const live = A.filter(x => x.routes.length).length;
     overviewParts = {
-      head: `<div class="intro"><h1>Flight Atlas</h1>
-    <p>Every passenger air route flying today, drawn by how many people fly it in a year. Click an airport to see everywhere it flies nonstop, then shift-click another for the way between them.</p></div>
+      head: `<div class="intro"><h1>Flight Atlas</h1></div>
   <div class="stats"><div><b>${fmtInt(R.length)}</b><span>routes</span></div><div><b>${fmtInt(live)}</b><span>airports</span></div>
     <div><b>${(total / 1e9).toFixed(2)}B</b><span>passengers a year</span></div></div>`,
       // the file lists routes busiest first
