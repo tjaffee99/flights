@@ -7,7 +7,8 @@ fly the route in a year.
   and (under *Flights away*) how many flights it takes to reach every other airport. Hover an
   airport to see the way there.
 - Click a route for its passengers, flight time, distance, airlines and source.
-- Click an airline for its whole network, with its logo where Wikimedia Commons has one.
+- Click an airline for its whole network (every other route goes away); pick an airport in it, or
+  an airline at an airport, to see just that airline's routes from there.
 - The toolbar on the map turns the flight paths off, filters them, and switches between a globe
   and a flat map. The panel folds away for a full-screen map, and zooming in shows the streets
   around each airport.
@@ -21,7 +22,8 @@ OpenFreeMap.
 python3 -m http.server 8000      # from the repo root, then open http://localhost:8000
 ```
 
-Links can point at an airport, a route or an airline: `#MIA`, `#MIA-CCS`, `#airline/Delta_Air_Lines`.
+Links can point at an airport, a route, an airline, or an airline at an airport: `#MIA`, `#MIA-CCS`,
+`#airline/Delta_Air_Lines`, `#airline/Delta_Air_Lines/ATL`.
 
 ## Which routes
 
@@ -34,6 +36,9 @@ destinations" table, kept current by editors, with notes such as *begins 1 Novem
 - *resumes* a future date: left out unless the route is seasonal or the official counts show it
   flying this year
 - *Dubai (via Muscat)*: not a nonstop route, so left out
+- listed only as *Charter*: left out unless the official counts show it flying regularly. That
+  drops contract, mining and military charters (Wake Island–Travis Air Force Base) and keeps holiday
+  charters the statistics count
 
 Routes the official statistics show flying in their latest months are kept even if Wikipedia
 doesn't list them, as long as they look like a schedule: about weekly or more (or 5,000+ passengers a
@@ -86,8 +91,15 @@ marked with ≈ in the panel.
 **Airlines** are the ones each airport's Wikipedia table lists for a route, identified by the
 airline's Wikipedia article (so *Air Algérie* and *Air Algerie* are one airline). Tables list the
 brand that sells the flight (*American Eagle*, *Delta Connection*), not the regional airline that
-operates it. Logos come from Wikidata's logo property, rendered from Wikimedia Commons
-(`pipeline/fetch_logos.py`); airlines without one get their initials.
+operates it. Logos (`pipeline/fetch_logos.py`) come from Wikidata's logo property on Wikimedia
+Commons; failing that, from the logo the airline's English Wikipedia article shows (often one of
+Wikipedia's own non-free files, used there and here to identify the airline); failing that, for a
+brand like American Eagle, from its parent airline. Airlines without one get their initials.
+
+**Flights away** counts the fewest flights from an airport to every other. A dozen small networks no
+flight joins to the rest (the Aran Islands, Ketchikan's floatplanes, Shetland's inter-island
+flights) are linked to the nearest airport by a road or ferry trip that counts as free, so every
+airport can be reached.
 
 **Flight times** are typical block times for the distance, `45 min + 0.0703 min/km`, fitted to
 schedules from short hops to the longest flights; they're not from timetables.

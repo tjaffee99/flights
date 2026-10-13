@@ -150,6 +150,12 @@ def load_wikipedia(airports):
             airline_names[airline][name] += 1
             p['airlines'].add(airline)
             p['modes'].add(row['mode'])
+    # Charter-only listings (contract, mining, military and holiday charters) aren't flights the public
+    # can book on a schedule; they stay only if the official counts show them flying regularly.
+    charters = {k for k, p in pairs.items() if p['modes'] <= {'charter', 'seasonal_charter'}}
+    for k in charters:
+        del pairs[k]
+    print(f'Wikipedia: left out {len(charters)} charter-only routes')
     resuming -= set(pairs)
     stopped -= set(pairs) | resuming
     for code, names in labels.items():
@@ -523,6 +529,40 @@ def shrink_logo(src, dest):
         image.quantize(colors=96, method=Image.Quantize.FASTOCTREE).save(dest, optimize=True)
 
 
+def ground_links(routes, airports, used):
+    """[a, b] pairs (indices into `used`) joining each network no flight connects to the rest (the Aran
+    Islands, Ketchikan's floatplanes) to the nearest airport on the main network, so "flights away"
+    can count the trip there by road or ferry."""
+    neighbours = defaultdict(set)
+    for a, b in routes:
+        neighbours[a].add(b)
+        neighbours[b].add(a)
+    parts, seen = [], set()
+    for start in used:
+        if start in seen:
+            continue
+        part, stack = [], [start]
+        seen.add(start)
+        while stack:
+            x = stack.pop()
+            part.append(x)
+            for y in neighbours[x] - seen:
+                seen.add(y)
+                stack.append(y)
+        parts.append(part)
+    parts.sort(key=len, reverse=True)
+    main, index = parts[0], {x: i for i, x in enumerate(used)}
+    links = []
+    for part in parts[1:]:
+        # the nearest pair, preferring one in the same country (Kinshasa's N'Dolo to N'Djili, not Brazzaville)
+        cost = lambda xy: haversine(airports[xy[0]], airports[xy[1]]) * (1 if airports[xy[0]]['cc'] == airports[xy[1]]['cc'] else 3)
+        a, b = min(((x, y) for x in part for y in main), key=cost)
+        links.append([index[a], index[b], round(haversine(airports[a], airports[b]))])
+    print(f'{len(parts) - 1} networks unconnected by air, joined by road or ferry: ' +
+          ', '.join(f'{used[a]}–{used[b]} {km} km' for a, b, km in links))
+    return links
+
+
 def write(routes, wiki, airports, countries, measured_sources, today, overrides):
     titles = wikipedia_titles()
     used = sorted({x for key in routes for x in key})
@@ -593,6 +633,7 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides)
             'wiki': wiki_column(used, airports, titles),
         },
         'routes': out,
+        'ground': ground_links(routes, airports, used),
     }
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')))
