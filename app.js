@@ -54,10 +54,11 @@ function distance(x, y) {
 // the great circle from x to y as [lon, lat] points about every 250 km, in pieces split where it
 // crosses the antimeridian (the globe has one world: a longitude past ±180 would leave its surface).
 // The map draws straight lines between points in Mercator, which near a pole bend far off the great
-// circle, so above 60° the points close in until no step crosses more than 2° of longitude. Mercator ends
-// at 85°, so the few routes over the top pass under the polar cap, unseen, rather than round its edge.
+// circle, so above 60° the points close in until no step crosses more than 2° of longitude. The map's
+// tiles end at 85°, so the line layers stop there; the stretch of a route over the pole goes into
+// `polar` (if given) for the polar layer to draw.
 const CAP = 85;
-function arc(x, y, km) {
+function arc(x, y, km, polar = null) {
   const n = Math.max(2, Math.ceil(km / 250));
   const f1 = x.lat * RAD, l1 = x.lon * RAD, f2 = y.lat * RAD, l2 = y.lon * RAD;
   const p1 = [Math.cos(f1) * Math.cos(l1), Math.cos(f1) * Math.sin(l1), Math.sin(f1)];
@@ -76,19 +77,31 @@ function arc(x, y, km) {
     for (let j = 1; j < m; j++) points.push(at((k - 1 + j / m) / n));
     points.push(p);
   }
-  // the stretches below the cap, each ending on its edge
+  // the stretches below the cap, each ending on its edge, and between them the ones over it
   const over = p => Math.abs(p[1]) > CAP;
+  const stretch = (t0, t1) => {
+    const m = Math.max(8, Math.ceil((t1 - t0) * km / 15)), pts = [];
+    for (let j = 0; j <= m; j++) {
+      const p = at(t0 + (t1 - t0) * j / m);
+      if (pts.length) p[0] += 360 * Math.round((pts[pts.length - 1][0] - p[0]) / 360);   // longitudes run on past ±180
+      pts.push([p[0], p[1]]);
+    }
+    return pts;
+  };
   const runs = [[]];
+  let tIn = over(points[0]) ? 0 : null;
   points.forEach((p, k) => {
     const q = points[k - 1];
     if (q && over(p) !== over(q)) {
       let lo = q[2], hi = p[2];
       for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (over(at(mid)) === over(q)) lo = mid; else hi = mid; }
       const edge = at(over(q) ? hi : lo);
-      if (over(p)) { runs[runs.length - 1].push(edge); runs.push([]); } else runs[runs.length - 1].push(edge);
+      if (over(p)) { runs[runs.length - 1].push(edge); runs.push([]); tIn = edge[2]; }
+      else { runs[runs.length - 1].push(edge); if (polar) polar.push(stretch(tIn, edge[2])); tIn = null; }
     }
     if (!over(p)) runs[runs.length - 1].push(p);
   });
+  if (tIn !== null && polar) polar.push(stretch(tIn, 1));
   const parts = [];
   for (const run of runs.filter(r => r.length > 1)) {
     parts.push([]);
@@ -341,7 +354,140 @@ function addFlightLayers(p) {
   map.addSource('reach', { type: 'geojson', data: EMPTY, maxzoom: 10 });
   map.addSource('reach-hi', { type: 'geojson', data: EMPTY, maxzoom: 10 });
   for (const layer of flightLayers(p)) map.addLayer(layer);
+  // the stretches over the pole, drawn with the routes they belong to, and with the selection
+  const order = flightLayers(p).map(l => l.id);
+  map.addLayer(polarLayer('polar-routes', polarRoutes), order[order.indexOf('routes') + 1]);
+  map.addLayer(polarLayer('polar-focus', polarFocus), order[order.indexOf('hover') + 1]);
   showLines();
+}
+
+// ---------------------------------------------------------------- over the pole
+// The map's tiles end at 85°, so the line layers stop there, and the few routes that fly over the top
+// (Seattle–Dubai, New York–Singapore) would have a gap. These layers draw those stretches straight
+// onto the globe, each in the color of the line layer it continues and with that layer's width and
+// opacity as they stand, so zoom, selection, hovering and fading all match.
+const shown = { focus: new Set(), hover: new Set() };   // the routes on the focus and hover layers
+const rgb = hex => [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16) / 255);
+const styleOf = (id, color, entries) => {
+  const paint = map.getLayer(id).paint;
+  // a paint value as it stands at this zoom (data-driven ones for this route)
+  const value = name => { const v = paint.get(name); return e => typeof v === 'number' ? v : v.evaluate({ type: 2, properties: { p: e.r.pax } }, {}); };
+  return { entries, color: rgb(color), opacity: value('line-opacity'), width: value('line-width') };
+};
+function polarRoutes() {
+  if (!S.lines || map.getLayoutProperty('routes', 'visibility') === 'none') return [];
+  const entries = POLAR.filter(({ r }) => r.pax >= S.min && (r.dom ? S.dom : S.intl));
+  return entries.length ? [styleOf('routes', selecting() ? pal().faded : pal().route, entries)] : [];
+}
+function polarFocus() {
+  if (!S.lines) return [];
+  const p = pal(), out = [];
+  const focus = POLAR.filter(({ r }) => shown.focus.has(r.i)), hover = POLAR.filter(({ r }) => shown.hover.has(r.i));
+  if (focus.length) out.push(styleOf('focus-halo', p.halo, focus), styleOf('focus', p.hot, focus));
+  if (hover.length) out.push(styleOf('hover', p.text, hover));
+  return out;
+}
+const POLAR_VS = `
+in vec2 a_pos;
+in vec2 a_other;
+in vec2 a_side;   // which side of the line, and whether a_other is ahead (1) or behind (-1)
+uniform vec2 u_viewport;
+uniform float u_half;
+out float v_dist;
+void main() {
+  // a quad around each piece of the line, its width measured on the screen
+  vec4 here = projectTile(a_pos), there = projectTile(a_other);
+  vec2 d = (there.xy / there.w - here.xy / here.w) * u_viewport * a_side.y;
+  vec2 n = length(d) > 0.0 ? normalize(vec2(-d.y, d.x)) : vec2(0.0);
+  float w = u_half + 1.0;   // a pixel more, faded out, for a smooth edge
+  gl_Position = here + vec4(n * a_side.x * w * 2.0 / u_viewport * here.w, 0.0, 0.0);
+  v_dist = a_side.x * w;
+}`;
+const POLAR_FS = `#version 300 es
+precision highp float;
+uniform vec4 u_color;
+uniform float u_half;
+in float v_dist;
+out vec4 fragColor;
+void main() { fragColor = u_color * clamp(u_half + 0.5 - abs(v_dist), 0.0, 1.0); }`;
+function polarLayer(id, styles) {
+  const programs = {};
+  let vao = null, spans = null;
+  const program = (gl, shader) => {
+    if (programs[shader.variantName]) return programs[shader.variantName];
+    const compile = (type, source) => {
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, source); gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+      return sh;
+    };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, `#version 300 es\n${shader.vertexShaderPrelude}\n${shader.define}\n${POLAR_VS}`));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, POLAR_FS));
+    gl.linkProgram(prog);
+    const u = name => gl.getUniformLocation(prog, name);
+    return (programs[shader.variantName] = { prog, attr: ['a_pos', 'a_other', 'a_side'].map(a => gl.getAttribLocation(prog, a)),
+      u: Object.fromEntries(['u_projection_matrix', 'u_projection_fallback_matrix', 'u_projection_tile_mercator_coords',
+        'u_projection_clipping_plane', 'u_projection_transition', 'u_viewport', 'u_half', 'u_color'].map(k => [k, u(k)])) });
+  };
+  // every stretch as triangles: two per piece, each corner knowing the other end of its piece
+  const build = (gl, prog) => {
+    const merc = ([lon, lat]) => [(lon + 180) / 360, 0.5 - Math.log(Math.tan(Math.PI / 4 + lat * RAD / 2)) / (2 * Math.PI)];
+    const data = [];
+    spans = new Map();
+    for (const e of POLAR) {
+      const start = data.length / 6;
+      for (const pts of e.stretches) {
+        for (let k = 1; k < pts.length; k++) {
+          const a = merc(pts[k - 1]), b = merc(pts[k]);
+          // corners: start left, start right, end left, end right; triangles (0 1 2) (1 3 2)
+          const c = [[a, b, 1, 1], [a, b, -1, 1], [b, a, 1, -1], [b, a, -1, -1]];
+          for (const k of [0, 1, 2, 1, 3, 2]) { const [p, q, side, dir] = c[k]; data.push(p[0], p[1], q[0], q[1], side, dir); }
+        }
+      }
+      spans.set(e, [start, data.length / 6 - start]);
+    }
+    vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+    [0, 1, 2].forEach(k => {
+      gl.enableVertexAttribArray(prog.attr[k]);
+      gl.vertexAttribPointer(prog.attr[k], 2, gl.FLOAT, false, 24, 8 * k);
+    });
+    gl.bindVertexArray(null);
+  };
+  return {
+    id, type: 'custom', renderingMode: '2d',
+    render(gl, args) {
+      // drawn on the globe only: on the flat map the routes simply run off its top edge
+      if (!POLAR.length || args.shaderData.variantName !== 'globe' || typeof WebGL2RenderingContext === 'undefined' || !(gl instanceof WebGL2RenderingContext)) return;
+      const draws = styles();
+      if (!draws.length) return;
+      const prog = program(gl, args.shaderData), d = args.defaultProjectionData, u = prog.u;
+      if (!vao) build(gl, prog);
+      gl.useProgram(prog.prog);
+      gl.uniformMatrix4fv(u.u_projection_matrix, false, d.mainMatrix);
+      gl.uniformMatrix4fv(u.u_projection_fallback_matrix, false, d.fallbackMatrix);
+      gl.uniform4f(u.u_projection_tile_mercator_coords, ...d.tileMercatorCoords);
+      gl.uniform4f(u.u_projection_clipping_plane, ...d.clippingPlane);
+      gl.uniform1f(u.u_projection_transition, d.projectionTransition);
+      gl.uniform2f(u.u_viewport, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+      gl.bindVertexArray(vao);
+      const ratio = map.getPixelRatio();
+      for (const { entries, color, opacity, width } of draws) {
+        for (const e of entries) {
+          const o = opacity(e);
+          gl.uniform4f(u.u_color, color[0] * o, color[1] * o, color[2] * o, o);
+          gl.uniform1f(u.u_half, width(e) * ratio / 2);
+          gl.drawArrays(gl.TRIANGLES, ...spans.get(e));
+        }
+      }
+      gl.bindVertexArray(null);
+    },
+  };
 }
 
 // a theme change restyles every layer in place (paint only), then reapplies the selection's fading
@@ -363,14 +509,16 @@ function HOME() {
   const zoom = 1.55 + Math.log2(Math.max(200, Math.min(0.86 * h, 0.92 * w)) / 460);
   return { center: [-30, 30], zoom, padding: pad };
 }
-let map = null, routeGeo = null, airportGeo = null;
+let map = null, routeGeo = null, airportGeo = null, POLAR = [];
 
 function buildGeo() {
-  routeGeo = { type: 'FeatureCollection', features: R.map(r => ({
-    type: 'Feature',
-    properties: { i: r.i, a: r.a, b: r.b, p: r.pax, e: isEst(r) ? 1 : 0, d: r.dom ? 1 : 0 },
-    geometry: { type: 'MultiLineString', coordinates: arc(A[r.a], A[r.b], r.km) },
-  })) };
+  POLAR = [];
+  routeGeo = { type: 'FeatureCollection', features: R.map(r => {
+    const polar = [], coordinates = arc(A[r.a], A[r.b], r.km, polar);
+    if (polar.length) POLAR.push({ r, stretches: polar });
+    return { type: 'Feature', properties: { i: r.i, a: r.a, b: r.b, p: r.pax, e: isEst(r) ? 1 : 0, d: r.dom ? 1 : 0 },
+             geometry: { type: 'MultiLineString', coordinates } };
+  }) };
   airportGeo = { type: 'FeatureCollection', features: A.filter(x => x.routes.length).map(x => point(x)) };
 }
 const point = (x, sel = false) => ({
@@ -423,6 +571,7 @@ function showSelection() {
   const p = pal(), on = selecting(), v = S.view;
   const ids = focusOf(v);
   map.getSource('focus').setData(collection(ids.map(i => routeGeo.features[i])));
+  shown.focus = new Set(ids);
   const spots = new Map();
   for (const i of ids) for (const k of [R[i].a, R[i].b]) spots.set(k, A[k]);
   if (v.t === 'airport') spots.set(v.i, A[v.i]);
@@ -482,6 +631,7 @@ function setHover(i) {
   S.hover = key;
   const ids = i === null ? [] : Array.isArray(i) ? i : [i];
   if (map && map.getSource('hover')) map.getSource('hover').setData(collection(ids.map(k => routeGeo.features[k])));
+  shown.hover = new Set(ids);
   document.querySelectorAll('.row.hl').forEach(el => el.classList.remove('hl'));
   if (!Array.isArray(i) && i !== null) document.querySelectorAll(`.row[data-route="${i}"]`).forEach(el => el.classList.add('hl'));
 }
