@@ -183,7 +183,8 @@ def number(text):
         return round(float(match.group(1)) * 1e6)
     # Thousands grouped by commas, dots, or (only when nothing like a decimal or % follows) spaces;
     # the change from last year often comes right after ("1,539,674 186.97%").
-    for pattern in (r'\d{1,3}(?:,\d{3})+(?!\d)', r'\d{1,3}(?:\.\d{3})+(?![\d,])',
+    # Indian figures group lakhs and crores: "3,04,83,885" is 30,483,885
+    for pattern in (r'(?<![\d,])\d{1,2}(?:,\d{2})+,\d{3}(?![\d,])', r'\d{1,3}(?:,\d{3})+(?!\d)', r'\d{1,3}(?:\.\d{3})+(?![\d,])',
                     r'\d{1,3}(?:[\s\u00a0\u202f]\d{3})+(?![\d.,%])', r'\d+'):
         match = re.search(pattern, text)
         if match:
@@ -191,31 +192,53 @@ def number(text):
     return None
 
 
+MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+
+def months_covered(text):
+    """How many months a statistics heading covers: 12 for a year or a fiscal year ("April 2025 –
+    March 2026"), fewer for a part of one ("September to December 2025"), None if it can't tell."""
+    named = [MONTHS.index(m.group(1).lower()[:3]) for m in re.finditer(r'\b(%s)[a-z]*\b' % '|'.join(MONTHS), text, re.I)]
+    years = [int(y) for y in re.findall(r'(?:19|20)\d\d', text)]
+    if not named:
+        return 12
+    if len(named) == 2:
+        span = named[1] - named[0] + 1 + 12 * (max(years) - min(years) if len(years) > 1 else 0)
+        return span if 0 < span <= 12 else None
+    return None
+
+
 def infobox_passengers(soup):
-    """(passengers, year) from the infobox's statistics block, if any."""
+    """(passengers, year) from the infobox's statistics block, if any. A part-year figure is scaled
+    up to a year; one-way enplanements are doubled."""
     box = soup.select_one('table.infobox')
     if not box:
         return None, None
-    year = None
+    year, scale = None, 1.0
     for row in box.find_all('tr'):
         header = row.find('th', class_='infobox-header')
         if header:
-            found = re.search(r'(19|20)\d\d', header.get_text())
-            if found and 'statistic' in header.get_text().lower():
-                year = int(found.group(0))
+            text = header.get_text(' ', strip=True)
+            found = re.search(r'(19|20)\d\d', text)
+            if found and 'statistic' in text.lower():
+                months = months_covered(text)
+                year, scale = (int(found.group(0)), 12 / months) if months else (None, 1.0)
             continue
         label = row.find('th', class_='infobox-label')
         data = row.find('td', class_='infobox-data')
         if not label or not data or year is None:
             continue
         name = label.get_text(' ', strip=True).lower()
-        if 'passenger' in name and not re.search(r'change|growth|%|international|domestic|transit|cargo|movement', name):
+        # "Passengers" or "Passenger movements", not aircraft movements or a terminal's capacity
+        if 'passenger' in name and not re.search(r'change|growth|%|international|domestic|transit|cargo|aircraft|capacity', name):
             for junk in data.select('sup, img, span[typeof="mw:File"]'):
                 junk.decompose()
             value = number(data.get_text(' ', strip=True))
             own_year = re.search(r'(19|20)\d\d', name)
             if value and value > 100:
-                return value, int(own_year.group(0)) if own_year else year
+                one_way = 'enplane' in name and not re.search(r'deplane|total|\+', name)
+                value *= scale * (2 if one_way else 1)
+                return round(value), int(own_year.group(0)) if own_year else year
     return None, None
 
 
@@ -336,10 +359,10 @@ def main():
                     listings.append({'origin': iata, 'airline': airline, 'airline_title': airline_title, 'dest_title': title,
                                      'dest_name': display, 'mode': mode, 'status': status, 'note': note})
         for block in soup.select('div.stat'):
-            rows, year, one_way = parse_route_stats(block, today)
+            rows, stat_year, one_way = parse_route_stats(block, today)
             for titles, text, value in rows:
                 stats.append({'airport': iata, 'titles': titles, 'text': text, 'passengers': value,
-                              'year': year or '', 'one_way': int(one_way),
+                              'year': stat_year or '', 'one_way': int(one_way),
                               'table': ' / '.join(json.loads(block['data-headings']))})
         airports.append({'iata': iata, 'title': own_title, 'tables': tables,
                          'passengers': passengers or '', 'passengers_year': year or ''})

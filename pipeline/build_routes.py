@@ -67,6 +67,9 @@ MIN_PASSENGERS = 5000
 RECENT_MONTHS = 2             # a measured route must have flown in the last N months of its data
 STALE_MONTHS = 9              # data ending longer ago than this needs Wikipedia to confirm a route still flies
 USABLE_YEARS = {2019} | set(range(2023, 2100))
+# An airport's yearly total sets its size, and the scale its estimated routes are fitted to. An older
+# figure (Iran's are from 2017) is far better than none, as long as it isn't from the pandemic.
+TOTAL_YEARS = set(range(2015, 2020)) | set(range(2023, 2100))
 airlines_seen = {}            # airline key -> the name most listings give it (filled by load_wikipedia)   # yearly figures to use (not the pandemic years)
 
 
@@ -126,30 +129,40 @@ def load_wikipedia(airports):
     stopped = set()   # pairs Wikipedia lists only as suspended, ended or not started yet
     resuming = set()  # pairs on a break, flying again on a future date
     listings = defaultdict(int)
+
+    def airline_of(row):
+        """An airline is its Wikipedia article where the table links one (not a list of airlines),
+        else its name."""
+        name = re.sub(r'\s*\[\s*\d+\s*\]', '', row['airline']).strip()
+        title = row.get('airline_title') or ''
+        return (title if title and 'redlink=1' not in title and not title.startswith('List of') else 'name:' + name), name
+
     with open(BUILD / 'wiki_routes.csv', newline='') as f:
-        for row in csv.DictReader(f):
-            o, d = row['origin'], row['dest']
-            if not d or o == d or o not in airports or d not in airports:
-                continue
-            key = tuple(sorted((o, d)))
-            if row['status'] != 'current':
-                if row['status'] in ('suspended', 'ended', 'future'):
-                    stopped.add(key)
-                elif row['status'] == 'resuming':
-                    resuming.add(key)
-                continue
-            listings[o] += 1
-            if row['dest_name']:
-                labels[d][row['dest_name'].strip()] += 1
-            p = pairs.setdefault(key, {'by': set(), 'airlines': set(), 'modes': set()})
-            p['by'].add(o)
-            # an airline is its Wikipedia article where the table links one, else its name
-            name = re.sub(r'\s*\[\s*\d+\s*\]', '', row['airline']).strip()
-            title = row.get('airline_title') or ''
-            airline = title if title and 'redlink=1' not in title else 'name:' + name
-            airline_names[airline][name] += 1
-            p['airlines'].add(airline)
-            p['modes'].add(row['mode'])
+        rows = [row for row in csv.DictReader(f)
+                if row['dest'] and row['origin'] != row['dest'] and row['origin'] in airports and row['dest'] in airports]
+    # An airline one airport lists as suspended or ended isn't flying the route, even if the other
+    # airport's page still lists it (Frankfurt still had Lufthansa to Tehran, which Tehran's page has
+    # as suspended). The note is the newer edit.
+    halted = {(tuple(sorted((row['origin'], row['dest']))), airline_of(row)[0]) for row in rows
+              if row['status'] in ('suspended', 'ended')}
+    for row in rows:
+        o, d = row['origin'], row['dest']
+        key = tuple(sorted((o, d)))
+        airline, name = airline_of(row)
+        if row['status'] != 'current' or (key, airline) in halted:
+            if row['status'] in ('suspended', 'ended', 'future', 'current'):
+                stopped.add(key)
+            elif row['status'] == 'resuming':
+                resuming.add(key)
+            continue
+        listings[o] += 1
+        if row['dest_name']:
+            labels[d][row['dest_name'].strip()] += 1
+        p = pairs.setdefault(key, {'by': set(), 'airlines': set(), 'modes': set()})
+        p['by'].add(o)
+        airline_names[airline][name] += 1
+        p['airlines'].add(airline)
+        p['modes'].add(row['mode'])
     # Charter-only listings (contract, mining, military and holiday charters) aren't flights the public
     # can book on a schedule; they stay only if the official counts show them flying regularly.
     charters = {k for k, p in pairs.items() if p['modes'] <= {'charter', 'seasonal_charter'}}
@@ -301,13 +314,13 @@ class Model:
     def __init__(self, airports, listings, totals):
         self.airports, self.listings, self.totals = airports, listings, totals
         sizes = [(math.log1p(listings[x]), math.log(t)) for x, (t, year) in totals.items()
-                 if year in USABLE_YEARS and listings[x]]
+                 if year in TOTAL_YEARS and listings[x]]
         sx, sy = np.array(sizes).T
         self.size_fit = np.polyfit(sx, sy, 1)
         self.airline_effect = {}
 
     def size(self, x):
-        if x in self.totals and self.totals[x][1] in USABLE_YEARS:
+        if x in self.totals and self.totals[x][1] in TOTAL_YEARS:
             return math.log(self.totals[x][0])
         return float(np.polyval(self.size_fit, math.log1p(self.listings[x])))
 
@@ -349,6 +362,9 @@ class Model:
 
     def fit(self, keys, pairs, y):
         X0 = np.array([self.base_features(k, pairs[k]) for k in keys])
+        # predictions keep inside what training saw: an Iranian route listing 20 airlines is not
+        # five times a route with four
+        self.lo, self.hi = X0.min(axis=0), X0.max(axis=0)
         y = np.asarray(y)
         base = self.solve(X0, y)
         residuals = y - X0 @ base
@@ -365,7 +381,7 @@ class Model:
         return X @ self.coef
 
     def predict(self, key, p):
-        x = self.base_features(key, p) + [self.airline_term(p, self.airline_effect)]
+        x = list(np.clip(self.base_features(key, p), self.lo, self.hi)) + [self.airline_term(p, self.airline_effect)]
         return math.exp(float(np.array(x) @ self.coef))
 
 
@@ -395,7 +411,7 @@ def calibrate(priors, fixed_at, targets, rounds=80):
     return {k: v * f[k[0]] * f[k[1]] for k, v in priors.items()}, goal
 
 
-def estimate(fixed, wiki, model, totals, covered, train_sources):
+def estimate(fixed, wiki, model, totals, covered, national, train_sources):
     """Estimates for every Wikipedia route without a count, given the counted routes `fixed`."""
     keys = [k for k, r in fixed.items() if k in wiki and r['source'] in train_sources]
     model.fit(keys, wiki, [math.log(fixed[k]['ab'] + fixed[k]['ba']) for k in keys])
@@ -404,7 +420,11 @@ def estimate(fixed, wiki, model, totals, covered, train_sources):
     for key, r in fixed.items():
         for x in key:
             fixed_at[x] += r['ab'] + r['ba']
-    targets = {x: t for x, (t, year) in totals.items() if year in USABLE_YEARS and x not in covered}
+    # An airport a national source counts in full has no routes left to fit. Eurostat airports can:
+    # it withholds confidential routes (all of Norway's domestic ones), so where the counts fall well
+    # short of the airport's total, the estimated routes there make up the rest.
+    targets = {x: t for x, (t, year) in totals.items() if year in TOTAL_YEARS
+               and (x not in covered or (x not in national and fixed_at[x] < 0.75 * t))}
     return calibrate(priors, fixed_at, targets)
 
 
@@ -475,6 +495,7 @@ def main():
         rest = {k: r for k, r in routes.items() if r['source'] != held}
         guesses, _ = estimate(rest, wiki, Model(airports, listings, totals), totals,
                               set().union(*(v for s, v in covered_by.items() if s != held)),
+                              set().union(*(v for s, v in covered_by.items() if s != held and s in NATIONAL)),
                               set(SOURCE_PRIORITY) - {held})
         keys = [k for k in hidden if k in guesses]
         median, weighted, p80 = log_error([guesses[k] for k in keys], [hidden[k]['ab'] + hidden[k]['ba'] for k in keys])
@@ -483,7 +504,8 @@ def main():
 
     # --- estimate every Wikipedia route without a count
     model = Model(airports, listings, totals)
-    estimates, goal = estimate(routes, wiki, model, totals, covered, set(SOURCE_PRIORITY))
+    national = set().union(*(v for s, v in covered_by.items() if s in NATIONAL))
+    estimates, goal = estimate(routes, wiki, model, totals, covered, national, set(SOURCE_PRIORITY))
     print(f'Estimated {len(estimates)} routes; calibrated to the totals of {len(goal)} airports')
     for key, pax in estimates.items():
         routes[key] = {'ab': pax / 2, 'ba': pax / 2, 'source': ESTIMATE, 'months': 0, 'year': 0}

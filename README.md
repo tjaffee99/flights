@@ -36,7 +36,9 @@ destinations" table, kept current by editors, with notes such as *begins 1 Novem
 *resumes …*, *ends …* and *suspended*. `pipeline/parse_wikipedia.py` reads every such table:
 
 - *begins* a future date: not flying yet, so left out
-- *suspended*, or *ended* on a past date: left out
+- *suspended*, or *ended* on a past date: left out, even if the other airport's page still lists
+  the airline as flying it (Frankfurt's page still had Lufthansa to Tehran; Tehran's has it
+  suspended)
 - *resumes* a future date: left out unless the route is seasonal or the official counts show it
   flying this year
 - *Dubai (via Muscat)*: not a nonstop route, so left out
@@ -84,15 +86,23 @@ Each route's count comes from the best source that has it:
    - A regression fitted on the official counts predicts a route's passengers from what Wikipedia
      says about it: how big its two airports are, how many airlines fly it and which, the distance,
      whether it's domestic, and whether it's seasonal or charter-only.
+   - The regression only predicts within the range it was trained on, so a route listing far
+     more airlines than any it learned from (Iranian domestic routes list 20) isn't taken for a
+     giant.
    - Each airport's estimated routes are then scaled so that, with its counted routes, they add up
      to the airport's annual passenger total from its Wikipedia infobox. Every route has two
-     airports, so this is iterative proportional fitting.
+     airports, so this is iterative proportional fitting. Totals from 2015–2019 or 2023 on are
+     used (not the pandemic years); a part-year figure ("September to December 2025", for an
+     airport that opened then) is scaled up to a year, and Indian figures written in lakhs and
+     crores ("3,04,83,885") are read as such.
+   - Eurostat withholds some routes as confidential (all of Norway's domestic ones). Where an
+     airport's counted routes fall well short of its total, its estimated routes make up the rest.
 
    To check the estimates, the build hides each official source in turn and estimates its routes
-   from scratch. The typical (median) route comes out within a factor of about 1.6–1.9 of the
+   from scratch. The typical (median) route comes out within a factor of about 1.6–1.7 of the
    real count. That's good enough to tell a 50K route from a 500K one, not 400K from 500K.
 
-Counted routes cover about 58% of the 4.9 billion passengers a year on the map. Estimates are
+Counted routes cover about 57% of the 5 billion passengers a year on the map. Estimates are
 marked with ≈ in the panel.
 
 **Airlines** are the ones each airport's Wikipedia table lists for a route, identified by the
