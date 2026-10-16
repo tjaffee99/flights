@@ -933,10 +933,22 @@ function fmtMinutes(min) {
 }
 const flightTime = km => fmtMinutes(flightMinutes(km));
 
+// what the numbers rest on, and where they are weakest (map options › About the numbers)
+function aboutText() {
+  const total = R.reduce((s, r) => s + r.pax, 0);
+  const counted = R.reduce((s, r) => s + (isEst(r) ? 0 : r.pax), 0);
+  const official = [...new Set(D.sources.filter(s => s.url).map(s => s.short))];
+  const e = D.estimate_error;
+  return `<p>Routes are the ones airlines fly as of ${esc(D.routes_as_of)}, from Wikipedia’s airport pages. Editors keep them current, but a route can lag a schedule change by a few weeks.</p>
+  <p>Passengers are counted for ${Math.round(100 * counted / total)}% of travel, from official statistics (${esc(official.join(', '))}) and airports’ own figures.
+  The rest are estimates, marked ≈, fitted to each airport’s yearly total.${e ? ` Tested on routes whose official counts they didn’t see, half the estimates came within ×${e.median.toFixed(1)} of the real number (between ${(1 / e.median).toFixed(1)} and ${e.median.toFixed(1)} times it) and 80% within ×${e.p80.toFixed(1)}.` : ''}</p>
+  <p>They are least sure where little is published: China, Russia, the Gulf, Southeast Asia, Canada’s domestic routes, and countries at war or under sanctions, whose flights also change faster than anyone writes them down.</p>`;
+}
+
 // where a route's passenger count comes from, in a few words
 function sourceText(r) {
   const src = D.sources.find(s => s.id === r.src) || D.sources[0];
-  if (isEst(r)) return 'Passengers estimated: no published count for this route';
+  if (isEst(r)) return `Passengers estimated${D.estimate_error ? `, typically within ×${D.estimate_error.median.toFixed(1)} of the real number` : ''}: no published count for this route`;
   if (src.key === 'reported') return `Passengers from the airport’s statistics${r.year ? `, ${r.year}` : ''}`;
   if (src.key === 'busiest_list') return `Passengers from Wikipedia’s list of the busiest air routes, ${r.year}`;
   if (src.key === 'busiest_list_seats') return `Passengers estimated from ${r.year} seat counts in Wikipedia’s list of the busiest air routes`;
@@ -1207,6 +1219,8 @@ $('#optsbtn').addEventListener('click', () => {
   $('#optsbtn').setAttribute('aria-expanded', String(open));
   if (open && phone() && sheet.state === 'peek') setSheet('half');
 });
+// reading about the data on a phone wants the whole sheet
+$('#aboutfold').addEventListener('toggle', () => { if ($('#aboutfold').open && phone()) setSheet('full'); });
 
 // ---------------------------------------------------------------- phone: the panel is a sheet
 // It rests at one of three heights: just the search bar, half the screen, or nearly all of it.
@@ -1416,6 +1430,7 @@ fetch('data/flights.json')
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(d => {
     D = d; [A, R] = unpack(d);
+    $('#about').innerHTML = aboutText();
     buildGeo();
     render();
     initMap();

@@ -1,0 +1,104 @@
+# Rebuilds data/ from the latest official statistics and Wikipedia once a month, and publishes it
+# only if pipeline/checks.py passes. A failed run (a source down, a check tripped) publishes
+# nothing and leaves build/checks.txt in the run's artifacts; GitHub emails the repo owner.
+name: Monthly data rebuild
+
+on:
+  schedule:
+    - cron: '17 6 3 * *'   # 06:17 UTC on the 3rd of each month
+  workflow_dispatch:
+    inputs:
+      refresh:
+        description: 'Re-download everything (untick to reuse the last run''s downloads)'
+        type: boolean
+        default: true
+      force:
+        description: 'Publish even if the checks fail (after reading the last run''s checks.txt)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    defaults:
+      run:
+        working-directory: pipeline
+    env:
+      REFRESH: ${{ (github.event_name == 'schedule' || inputs.refresh) && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install numpy pandas requests beautifulsoup4 lxml python-dateutil Pillow
+
+      # Downloads and intermediate files from the last run. GitHub drops caches unused for a week,
+      # so a monthly run usually starts cold; a re-run after a failure doesn't.
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            pipeline/cache
+            pipeline/build
+          key: pipeline-${{ github.run_id }}
+          restore-keys: pipeline-
+
+      - name: Reference lists (OurAirports, Wikidata)
+        run: python3 fetch_reference.py ${REFRESH:+--refresh}
+
+      - name: Official statistics
+        # A source that fails keeps its previous rows when there are any; checks.py fails the
+        # build if one goes missing.
+        run: python3 build_measured.py ${REFRESH:+--refresh} || echo "::warning::some official sources failed"
+
+      - name: Wikipedia airport articles
+        run: python3 fetch_wikipedia.py ${REFRESH:+--refresh}
+
+      - run: python3 parse_wikipedia.py
+      - run: python3 fetch_airline_status.py ${REFRESH:+--refresh}
+      - run: python3 fetch_logos.py
+      - run: python3 build_routes.py
+
+      - name: Checks
+        run: python3 checks.py ${{ inputs.force && '--force' || '' }}
+
+      - name: Publish
+        working-directory: .
+        run: |
+          git add data
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Monthly data rebuild" -m "$(head -1 pipeline/build/checks.txt)"
+          git push
+          # pushes made with this workflow's token may not start a Pages build on their own
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checks
+          path: |
+            pipeline/build/checks.txt
+            pipeline/build/measured_sources.json
+          if-no-files-found: ignore
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            pipeline/cache
+            pipeline/build
+          key: pipeline-${{ github.run_id }}

@@ -49,11 +49,14 @@ OUT = HERE.parent / 'data' / 'flights.json'
 ABOUT = 'https://github.com/tjaffee99/flights#readme'
 
 # A source listed earlier wins when two sources count the same route.
-SOURCE_PRIORITY = ['us_bts_t100', 'uk_caa', 'br_anac', 'eu_eurostat_avia_par', 'au_bitre_dom', 'au_bitre_intl']
+SOURCE_PRIORITY = ['us_bts_t100', 'uk_caa', 'br_anac', 'eu_eurostat_avia_par', 'au_bitre_dom', 'au_bitre_intl',
+                   'in_dgca_dom', 'in_dgca_intl']
 SHORT_NAMES = {'us_bts_t100': 'US DOT', 'uk_caa': 'UK CAA', 'br_anac': 'ANAC Brazil', 'eu_eurostat_avia_par': 'Eurostat',
-               'au_bitre_dom': 'BITRE Australia', 'au_bitre_intl': 'BITRE Australia'}
+               'au_bitre_dom': 'BITRE Australia', 'au_bitre_intl': 'BITRE Australia',
+               'in_dgca_dom': 'DGCA India', 'in_dgca_intl': 'DGCA India'}
 # Sources that count every route touching these countries' airports.
-NATIONAL = {'us_bts_t100': {'US', 'PR', 'VI', 'GU', 'AS', 'MP'}, 'uk_caa': {'GB', 'JE', 'GG', 'IM'}, 'br_anac': {'BR'}}
+NATIONAL = {'us_bts_t100': {'US', 'PR', 'VI', 'GU', 'AS', 'MP'}, 'uk_caa': {'GB', 'JE', 'GG', 'IM'}, 'br_anac': {'BR'},
+            'in_dgca_dom': {'IN'}, 'in_dgca_intl': {'IN'}}
 # Sources counted by city pair, including passengers on one-stop "through" flights (Sydney–London via
 # Singapore): a pair from these is only a route if Wikipedia lists it as nonstop.
 THROUGH = {'au_bitre_intl'}
@@ -566,6 +569,7 @@ def main():
 
     # --- how good are the estimates? Hide each official source, estimate its routes, compare.
     print('Estimates checked against official counts they did not see:')
+    checked = ([], [])
     for held in SOURCE_PRIORITY:
         if not covered_by.get(held):
             continue
@@ -577,8 +581,15 @@ def main():
                               set(SOURCE_PRIORITY) - {held}, withheld)
         keys = [k for k in hidden if k in guesses]
         median, weighted, p80 = log_error([guesses[k] for k in keys], [hidden[k]['ab'] + hidden[k]['ba'] for k in keys])
-        print(f'  {SHORT_NAMES[held]:12s} {len(keys):6d} routes: median off by x{median:.2f}, '
+        print(f'  {held:22s} {len(keys):6d} routes: median off by x{median:.2f}, '
               f'by passengers x{weighted:.2f}, 80% within x{p80:.2f}')
+        checked[0].extend(guesses[k] for k in keys)
+        checked[1].extend(hidden[k]['ab'] + hidden[k]['ba'] for k in keys)
+    median, weighted, p80 = log_error(*checked)
+    print(f'  {"all":22s} {len(checked[0]):6d} routes: median off by x{median:.2f}, '
+          f'by passengers x{weighted:.2f}, 80% within x{p80:.2f}')
+    # shown on the site, next to the estimates
+    estimate_error = {'median': round(median, 2), 'p80': round(p80, 2)}
 
     # --- estimate every Wikipedia route without a count
     model = Model(airports, listings, totals)
@@ -602,7 +613,7 @@ def main():
     if removed:
         print(f'Overrides removed {len(removed)} routes: {", ".join(sorted(removed)[:30])}')
 
-    write(routes, wiki, airports, countries, measured_sources, today, overrides)
+    write(routes, wiki, airports, countries, measured_sources, today, overrides, estimate_error)
 
 
 def wikipedia_titles():
@@ -665,7 +676,7 @@ def ground_links(routes, airports, used):
     return links
 
 
-def write(routes, wiki, airports, countries, measured_sources, today, overrides):
+def write(routes, wiki, airports, countries, measured_sources, today, overrides, estimate_error):
     titles = wikipedia_titles()
     used = sorted({x for key in routes for x in key})
     index = {x: i for i, x in enumerate(used)}
@@ -722,6 +733,7 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides)
         'routes_as_of': today.strftime('%B %Y'),
         'built': today.isoformat(),
         'about': ABOUT,
+        'estimate_error': estimate_error,
         'sources': source_list,
         'countries': {c: countries.get(c, c) for c in sorted({airports[x]['cc'] for x in used})},
         'airlines': [airlines_seen[a] for a in keys],

@@ -5,11 +5,12 @@ airline linked from a current listing, this reads its article's infobox ("Ceased
 categories, and writes build/airline_status.json: title -> {"ceased": text or null, "defunct": bool}.
 An airline is defunct when its infobox gives a past date for ceasing operations, or when it is in a
 "Defunct airlines" category and its article speaks of it in the past tense ("Fly540 was a low-cost
-airline..."). Re-running only fetches articles not in cache/airline_status.json.
+airline..."). Re-running only fetches articles not in cache/airline_status.json; --refresh fetches them all again.
 
     python3 fetch_airline_status.py
 """
 
+import argparse
 import csv
 import datetime as dt
 import json
@@ -52,9 +53,12 @@ def defunct(f, today):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--refresh', action='store_true', help='refetch articles already cached')
+    args = parser.parse_args()
     today = dt.date.today()
     cache_path = CACHE / 'airline_status.json'
-    cache = json.loads(cache_path.read_text()) if cache_path.exists() else {}
+    cache = json.loads(cache_path.read_text()) if cache_path.exists() and not args.refresh else {}
     with open(BUILD / 'wiki_routes.csv', newline='') as f:
         titles = sorted({r['airline_title'] for r in csv.DictReader(f) if r['status'] == 'current' and r['airline_title']
                          and 'redlink=' not in r['airline_title'] and not r['airline_title'].startswith('List of')})

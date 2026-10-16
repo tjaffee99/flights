@@ -30,6 +30,7 @@ SOURCES = {
     "uk": "measured_uk_caa",
     "br": "measured_br_anac",
     "au": "measured_au_bitre",
+    "in": "measured_in_dgca",
 }
 
 

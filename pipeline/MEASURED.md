@@ -11,11 +11,12 @@ python3 -I pipeline/build_measured.py --sources us,uk   # rebuild a subset; othe
 python3 -I pipeline/check_measured.py              # sanity checks
 ```
 
-Source keys: `us` BTS T-100, `eu` Eurostat, `uk` CAA, `br` ANAC, `au` BITRE.
+Source keys: `us` BTS T-100, `eu` Eurostat, `uk` CAA, `br` ANAC, `au` BITRE, `in` DGCA India.
 Downloads are cached in `cache/<source>/`. BTS and CAA work out the latest month
 on every run and fetch only months they don't have. Eurostat cache files are keyed
 by the dataset's last-update date. ANAC is one 360 MB file and the BITRE CSVs are
-keyed by their data.gov.au date, so use `--refresh` to pick up new ANAC months.
+keyed by their data.gov.au date, so use `--refresh` to pick up new ANAC months. The DGCA
+CSVs are fetched again once they're a week old.
 
 ## Output columns
 
@@ -38,14 +39,16 @@ keyed by their data.gov.au date, so use `--refresh` to pick up new ANAC months.
 
 ## Sources and caveats
 
-| source | what | window (as of 2026-10-12) |
+| source | what | window (as of 2026-10-16) |
 |---|---|---|
 | `us_bts_t100` | T-100 Segment, all carriers, CLASS F, pax>0 (TranStats form POST, per month) | 2025-08..2026-07 |
 | `eu_eurostat_avia_par` | `avia_par_<cc>` SDMX-CSV, **PAS_BRD_DEP/ARR** (+ ST_PAS, CAF_PAS) | 2024-01..2024-12 (BA: 2023) |
-| `uk_caa` | CAA monthly Tables 12.1 (intl) + 12.2 (domestic), names mapped via `uk_caa_airport_names.csv` | 2025-08..2026-07 |
+| `uk_caa` | CAA monthly Tables 12.1 (intl) + 12.2 (domestic), names mapped via `uk_caa_airport_names.csv` | 2025-09..2026-08 |
 | `br_anac` | ANAC Dados Estatísticos, flight stages, GRUPO_DE_VOO=REGULAR, stages touching Brazil | 2025-09..2026-08 |
 | `au_bitre_intl` | BITRE intl city pairs (data.gov.au mirror), Passengers_In/Out | 2025-07..2026-06 |
-| `au_bitre_dom` | BITRE top ~70 domestic city pairs (data.gov.au mirror) | 2025-05..2026-04 |
+| `au_bitre_dom` | BITRE top ~70 domestic city pairs (data.gov.au mirror) | 2025-08..2026-07 |
+| `in_dgca_dom` | DGCA monthly domestic city pairs, each way (via the india-aviation-traffic CSVs) | 2025-08..2026-07 |
+| `in_dgca_intl` | DGCA quarterly international city pairs (Table 4), each way, Indian and foreign airlines | 2025-07..2026-06 |
 
 - **Eurostat measure**: PAS_CRD/PAS_BRD are both-ways totals, and the `_DEP`/`_ARR`
   variants give the split by direction. We use PAS_BRD (passengers on board per flight
@@ -71,7 +74,18 @@ keyed by their data.gov.au date, so use `--refresh` to pick up new ANAC months.
   airport (Tokyo→NRT except Sydney→HND, London→LHR, …). International pairs are
   "uplift/discharge within one flight number", so through flights add pairs like
   SYD–LHR (QF1 via SIN).
-- Skipped: Canada (StatCan only has airport totals, and its O&D city-pair tables end
-  in 2018), Japan MLIT (e-Stat Excel files with Japanese route names: more than 30
-  minutes of work), Korea (airportal.go.kr resets the connection), India DGCA (portal
-  is JS and PDF only).
+- DGCA India: DGCA publishes its tables as PDFs and through a JavaScript portal. The
+  [india-aviation-traffic](https://github.com/Vonter/india-aviation-traffic) project
+  turns them into CSVs, which is what this reads. Ports are DGCA's city names, matched
+  to airports by name with the overrides in `measured_in_dgca.py`. Where a foreign city
+  has several airports (London, New York), the one Wikipedia lists for that Indian city
+  is used. The international table is quarterly, so each quarter is spread over its
+  months. Like BITRE, it counts passengers between the cities a flight number links, so
+  through flights add pairs with no nonstop flight; `build_routes.py` drops any pair
+  Wikipedia doesn't list. Airports without an IATA code (Purnea, Pithoragarh, Mundra,
+  about 0.3M passengers a year) are left out.
+- Skipped: Canada (StatCan's domestic city-pair series stopped, and its newer tables
+  are journeys from origin to destination, not flights; Canada–US routes are already in
+  T-100), Japan MLIT (e-Stat Excel files with Japanese route names: more than 30
+  minutes of work), Korea (airportal.go.kr resets the connection), and the OpenSky
+  flight-tracking API (needs a registered account, and counts flights, not passengers).
