@@ -79,7 +79,8 @@ CSVs are fetched again once they're a week old.
   turns them into CSVs, which is what this reads. Ports are DGCA's city names, matched
   to airports by name with the overrides in `measured_in_dgca.py`. Where a foreign city
   has several airports (London, New York), the one Wikipedia lists for that Indian city
-  is used. The international table is quarterly, so each quarter is spread over its
+  is used, else the one with the most routes, so `parse_wikipedia.py` has to run first
+  (the source stops with an error if its routes are missing). The international table is quarterly, so each quarter is spread over its
   months. Like BITRE, it counts passengers between the cities a flight number links, so
   through flights add pairs with no nonstop flight; `build_routes.py` drops any pair
   Wikipedia doesn't list. Airports without an IATA code (Purnea, Pithoragarh, Mundra,

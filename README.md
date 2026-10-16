@@ -156,22 +156,24 @@ committed).
 ```sh
 cd pipeline
 python3 fetch_reference.py             # OurAirports and Wikidata's airport codes
-python3 build_measured.py              # official statistics (see MEASURED.md for options)
-python3 fetch_wikipedia.py --refresh   # ~4,100 airport articles; takes about an hour
+python3 fetch_wikipedia.py --refresh   # ~4,100 airport articles; takes 20 minutes to an hour
 python3 parse_wikipedia.py             # current routes, airport totals, busiest-routes tables
+python3 build_measured.py              # official statistics (see MEASURED.md); needs parse_wikipedia's routes
 python3 fetch_airline_status.py        # which airlines have stopped flying, from their articles
-python3 fetch_logos.py                 # airline logos from Wikidata / Wikimedia Commons
+python3 fetch_logos.py                 # airline logos from Wikidata / Wikimedia Commons (--refresh to choose again)
 python3 build_routes.py                # writes ../data/flights.json and others.json
 python3 checks.py                      # compares with the published build; see below
 ```
 
 `checks.py` compares the new `data/flights.json` with the last committed one and writes
 `build/checks.txt`. It fails (exit status 1) if the passengers, routes or airports move by more
-than a few percent, if the world total leaves 4–6 billion, or if an official source's routes
+than a few percent, if the world total leaves 4–6 billion, if an official source's routes
 shrink by more than 30% (a source that fails to download quietly hands its routes to the
-estimates). It also lists things worth a look: busy routes that vanished or doubled, big new
-routes, airports far from their reported totals, big estimates resting on one airline, and the
-airlines left out as no longer flying.
+estimates), or if a route of over a million passengers appears that wasn't there before (nearly
+always a mapping slip: the first scheduled run took DGCA's "London" for Luton). It also lists
+things worth a look: busy routes that vanished or doubled, big new routes, airports far from their
+reported totals, big estimates resting on one airline, and the airlines left out as no longer
+flying.
 
 `.github/workflows/rebuild.yml` runs all of this on the 3rd of every month and commits `data/`
 only if the checks pass. When they fail, nothing is published, `checks.txt` is attached to the

@@ -65,20 +65,23 @@ def fold(text):
 
 class Matcher:
     """City names -> IATA, by the overrides, else an airport whose city or name matches. Ties between
-    a city's airports go to the one Wikipedia lists flights to the other end from."""
+    a city's airports go to the one Wikipedia lists flights to the other end from, else to the one
+    with more routes on Wikipedia (Heathrow over Luton)."""
 
     def __init__(self, airports: Airports):
         self.airports = airports
         a = airports.df[airports.df.iata_code.str.fullmatch(r"[A-Z0-9]{3}") & (airports.df.type != "closed")]
         self.rows = list(zip(a.iata_code, a.iso_country, a.type, a.scheduled_service,
                              a.municipality.map(fold), a.name.map(fold)))
-        self.listed = Counter()
+        self.listed, self.size = Counter(), Counter()
         path = BUILD / "wiki_routes.csv"
-        if path.exists():
-            with open(path, newline="") as f:
-                for r in csv.DictReader(f):
-                    if r["status"] == "current" and r["dest"]:
-                        self.listed[frozenset((r["origin"], r["dest"]))] += 1
+        if not path.exists():   # without it London is whichever airport comes first
+            raise RuntimeError(f"{path} is missing: run parse_wikipedia.py before this")
+        with open(path, newline="") as f:
+            for r in csv.DictReader(f):
+                if r["status"] == "current" and r["dest"]:
+                    self.listed[frozenset((r["origin"], r["dest"]))] += 1
+                    self.size[r["origin"]] += 1
         self.cache = {}
 
     def candidates(self, raw, india):
@@ -111,7 +114,8 @@ class Matcher:
         if not a or not b:
             return (a[0] if a else None), (b[0] if b else None)
         # where either city has several airports, prefer the pair Wikipedia lists flights for
-        best = max(((x, y) for x in a for y in b), key=lambda p: (self.listed[frozenset(p)], -a.index(p[0]) - b.index(p[1])))
+        best = max(((x, y) for x in a for y in b),
+                   key=lambda p: (self.listed[frozenset(p)], self.size[p[0]] + self.size[p[1]], -a.index(p[0]) - b.index(p[1])))
         return best
 
 

@@ -81,9 +81,12 @@ def main():
         moved = [(k, old[k]['pax'], now[k]['pax']) for k in top if k in now and not 0.5 < now[k]['pax'] / old[k]['pax'] < 2]
         for k, a, b in moved:
             warn(f'busy route changed more than 2x: {"-".join(k)} {a:,} -> {b:,} ({now[k]["src"]})')
+        # A route of a million passengers doesn't appear from one month to the next: one that does is
+        # nearly always a mapping slip (DGCA's "London" taken for Luton).
         new_big = sorted((k for k in now if k not in old and now[k]['pax'] > 300_000), key=lambda k: -now[k]['pax'])
         for k in new_big[:20]:
-            warn(f'new route over 300K: {"-".join(k)} {now[k]["pax"]:,} ({now[k]["src"]}, {", ".join(now[k]["airlines"][:3])})')
+            line = f'new route over 300K: {"-".join(k)} {now[k]["pax"]:,} ({now[k]["src"]}, {", ".join(now[k]["airlines"][:3]) or "no airline on Wikipedia"})'
+            (failures.append if now[k]['pax'] > 1_000_000 else warn)(line)
         # An official source that fails to download leaves its routes to the estimates: the totals
         # barely move, but the counted share does.
         by_src, old_by_src = defaultdict(float), defaultdict(float)

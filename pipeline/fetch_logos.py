@@ -10,11 +10,14 @@ English Wikipedia article), from the first of:
 
 Each is downloaded as a 160-pixel-wide PNG into cache/logos/. Writes build/airline_logos.json
 (article title -> file) and build/airline_logo_sources.json (title -> where it came from).
-Re-running only fetches what's missing. The logos remain their owners' trademarks.
+Re-running only fetches what's missing; --refresh chooses every airline's logo again (downloads
+stay cached). The logos remain their owners' trademarks.
 
     python3 fetch_logos.py
+    python3 fetch_logos.py --refresh
 """
 
+import argparse
 import csv
 import hashlib
 import re
@@ -68,35 +71,52 @@ def wikidata_logos(titles):
     return found
 
 
-def download(file_name, url=None):
-    """A 160px-wide PNG of the file (Commons unless a URL is given), cached; None if it can't be had."""
-    name = hashlib.sha1(file_name.encode()).hexdigest()[:16] + '.png'
-    path = LOGOS / name
-    if path.exists():
-        return name
-    url = url or 'https://commons.wikimedia.org/wiki/Special:FilePath/' + urllib.parse.quote(file_name.replace(' ', '_')) + '?width=160'
+def fetch_image(url):
+    """(body, content type) or None."""
     try:
         request = urllib.request.Request(url, headers={'User-Agent': UA})
         for attempt in range(6):
             try:
                 with urllib.request.urlopen(request, timeout=60) as response:
-                    body = response.read()
-                    kind = response.headers.get('Content-Type', '')
-                break
+                    return response.read(), response.headers.get('Content-Type', '')
             except urllib.error.HTTPError as error:
                 if error.code in (429, 500, 502, 503, 504):
                     time.sleep(2 * (attempt + 1))
                     continue
                 return None
-        else:
-            return None
     except Exception:
         return None
-    if not kind.startswith('image/') or len(body) > 200_000:
-        return None
-    path.write_bytes(body)
-    time.sleep(0.3)
-    return name
+    return None
+
+
+def download(file_name, url=None):
+    """A 160px-wide PNG of the file (Commons unless a URL is given), cached; None if it can't be had.
+    Wikimedia turns bots away from some thumbnail sizes, so a page's own thumbnail URL that fails is
+    tried again through Special:FilePath, which serves the standard sizes."""
+    name = hashlib.sha1(file_name.encode()).hexdigest()[:16] + '.png'
+    path = LOGOS / name
+    if path.exists():
+        return name
+    plain = urllib.parse.quote(re.sub(r'^File:', '', file_name).replace(' ', '_'))
+    urls = [url, f'https://en.wikipedia.org/wiki/Special:FilePath/{plain}?width=160'] if url else \
+        [f'https://commons.wikimedia.org/wiki/Special:FilePath/{plain}?width=160']
+    for u in urls:
+        got = fetch_image(u)
+        if got and got[1].startswith('image/') and len(got[0]) <= 200_000:
+            path.write_bytes(got[0])
+            time.sleep(0.3)
+            return name
+    return None
+
+
+def transparent(name):
+    """Whether a downloaded image has see-through pixels: logos usually do, photos and maps don't."""
+    from PIL import Image
+    try:
+        with Image.open(LOGOS / name) as image:
+            return image.convert('RGBA').getchannel('A').getextrema()[0] < 255
+    except Exception:
+        return False
 
 
 GENERIC = {'air', 'airline', 'airlines', 'airways', 'aviation', 'the', 'brand', 'airline brand', 'de', 'express', 'logo', 'svg', 'png'}
@@ -162,20 +182,22 @@ def guess_logo(title, images):
 
 
 def article_logos(titles):
-    """Title -> (file, thumbnail URL) for the logo each English Wikipedia article shows: the first
-    drawing (not a photo) in its infobox, else a guess among the article's images."""
+    """Title -> (file, thumbnail URL, check) for the logo each English Wikipedia article shows: the
+    first drawing (not a photo) in its infobox, else a guess among the article's images, else the
+    infobox's first PNG, if it turns out to be see-through (check=True)."""
     found = {}
     for k, title in enumerate(titles):
         infobox, everything = page_images(title)
-        drawings = [(f, u) for f, u in infobox if not re.search(r'\.jpe?g$', f, re.I) and not NOT_LOGOS.search(f) and not OLD.search(f)
-                    and (f.lower().endswith('.svg') or named_for(title, f))]   # a PNG may be a photo or a map
+        usable = [(f, u) for f, u in infobox if not re.search(r'\.jpe?g$', f, re.I) and not NOT_LOGOS.search(f) and not OLD.search(f)]
+        drawings = [(f, u) for f, u in usable if f.lower().endswith('.svg') or named_for(title, f)]   # a PNG may be a photo or a map
+        urls = dict(everything)
+        guess = None if drawings else guess_logo(title, list(urls))
         if drawings:
-            found[title] = drawings[0]
-        else:
-            urls = dict(everything)
-            guess = guess_logo(title, list(urls))
-            if guess:
-                found[title] = (guess, urls[guess])
+            found[title] = (*drawings[0], False)
+        elif guess:
+            found[title] = (guess, urls[guess], False)
+        elif usable:   # "AD tagline 23 final.png" for Aero Dili
+            found[title] = (*usable[0], True)
         if k % 50 == 49:
             print(f'{k + 1}/{len(titles)} articles', flush=True)
     return found
@@ -200,9 +222,12 @@ def parents(titles):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--refresh', action='store_true', help="choose every airline's logo again")
+    args = parser.parse_args()
     LOGOS.mkdir(parents=True, exist_ok=True)
     out_path = BUILD / 'airline_logos.json'
-    known = json.loads(out_path.read_text()) if out_path.exists() else {}
+    known = json.loads(out_path.read_text()) if out_path.exists() and not args.refresh else {}
     titles = airline_titles()
     files = wikidata_logos([t for t in titles if t not in known])
     for k, (title, file_name) in enumerate(files.items()):
@@ -213,18 +238,18 @@ def main():
             print(f'{k + 1}/{len(files)} logos', flush=True)
             out_path.write_text(json.dumps(known, ensure_ascii=False, indent=0))
     sources_path = BUILD / 'airline_logo_sources.json'
-    sources = json.loads(sources_path.read_text()) if sources_path.exists() else {}
+    sources = json.loads(sources_path.read_text()) if sources_path.exists() and not args.refresh else {}
     for title in files:
         if title in known:
             sources.setdefault(title, 'commons')
     print(f'{len(titles)} airlines; Wikidata has logos for {len(files)} more', flush=True)
 
     found = article_logos([t for t in titles if t not in known])
-    for title, (file_name, url) in found.items():
+    for title, (file_name, url, check) in found.items():
         name = download(file_name, url)
-        if name:
+        if name and (not check or transparent(name)):
             known[title], sources[title] = name, 'wikipedia'
-    print(f'{len(found)} more from the articles themselves', flush=True)
+    print(f'{sum(1 for t in found if t in known)} more from the articles themselves', flush=True)
 
     family = parents([t for t in titles if t not in known])
     for title, parent in family.items():
