@@ -938,6 +938,8 @@ function sourceText(r) {
   const src = D.sources.find(s => s.id === r.src) || D.sources[0];
   if (isEst(r)) return 'Passengers estimated: no published count for this route';
   if (src.key === 'reported') return `Passengers from the airport’s statistics${r.year ? `, ${r.year}` : ''}`;
+  if (src.key === 'busiest_list') return `Passengers from Wikipedia’s list of the busiest air routes, ${r.year}`;
+  if (src.key === 'busiest_list_seats') return `Passengers estimated from ${r.year} seat counts in Wikipedia’s list of the busiest air routes`;
   return `Passengers from ${src.short}, ${src.period}${r.months ? ` (scaled up from ${r.months} month${r.months > 1 ? 's' : ''})` : ''}`;
 }
 

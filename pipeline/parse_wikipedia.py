@@ -41,6 +41,9 @@ BUILD = HERE / 'build'
 
 SKIP_HEADINGS = re.compile(r'cargo|freight|former|chronolog|histor|defunct|terminated|ceased|busiest|statistic|traffic|'
                            r'helicopter|future|planned|proposed|incident|accident', re.I)
+# a table of routes as they were ("International service before 1994", "Previously served airlines"),
+# at any level of heading
+PAST = re.compile(r'histor|former|previous|\bbefore\b|prior to|defunct|ceased|chronolog', re.I)
 LABEL = re.compile(r"(seasonal\s+charter|charter|seasonal|year[- ]round|regular)\s*:", re.I)
 
 
@@ -302,6 +305,38 @@ def resolve_redirects(titles, cache_path):
     return cache
 
 
+def busiest_list_rows(path):
+    """Rows of Wikipedia's "List of busiest passenger air routes": the two airports' article titles,
+    the latest yearly figure (2019 or 2023 on), its year, whether it counts seats or passengers, and
+    the table. Tables of flight counts are skipped."""
+    soup = BeautifulSoup(gzip.open(path, 'rt', encoding='utf-8').read(), 'lxml')
+    out = []
+    for table in soup.select('table.wikitable'):
+        label = ' < '.join(h.get_text(' ', strip=True) for h in table.find_all_previous(['h2', 'h3', 'h4'], limit=2))
+        if re.search(r'movement|flights', label, re.I):
+            continue
+        basis = 'seats' if re.search(r'seat', label, re.I) else 'passengers'
+        rows = table.find_all('tr')
+        header = [c.get_text(' ', strip=True) for c in rows[0].find_all(['th', 'td'])]
+        # a column's year: "2025 [1]" is 2025, a fiscal "2023–2024" is 2024
+        years = [int(re.findall(r'(?:19|20)\d\d', h)[-1]) if re.search(r'(?:19|20)\d\d', h) and not re.search(r'airport|distance', h, re.I) else None
+                 for h in header]
+        for tr in rows[1:]:
+            cells = tr.find_all(['td', 'th'])
+            if len(cells) != len(header):
+                continue
+            titles = [title_from_url(a.get('href', '').replace('//en.wikipedia.org', 'https://en.wikipedia.org'))
+                      for a in tr.find_all('a', href=True)]
+            best = None
+            for cell, year in zip(cells, years):
+                value = number(cell.get_text(' ', strip=True)) if year else None
+                if value and value > 1000 and (year == 2019 or year >= 2023) and (best is None or year > best[1]):
+                    best = (value, year)
+            if best:
+                out.append({'titles': [t for t in titles if t], 'value': best[0], 'year': best[1], 'basis': basis, 'table': label})
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--today', default=dt.date.today().isoformat())
@@ -342,7 +377,7 @@ def main():
         tables = 0
         for block in soup.select('div.dest'):
             headings = json.loads(block['data-headings'])
-            if any(SKIP_HEADINGS.search(h) for h in headings[1:] or headings):
+            if any(SKIP_HEADINGS.search(h) for h in headings[1:] or headings) or any(PAST.search(h) for h in headings):
                 continue
             header = [c.get_text(' ', strip=True).lower() for c in block.table.find('tr').find_all(['th', 'td'])]
             if any(re.search(r'rank|passengers|frequency|weekly', h) for h in header):
@@ -367,7 +402,10 @@ def main():
         airports.append({'iata': iata, 'title': own_title, 'tables': tables,
                          'passengers': passengers or '', 'passengers_year': year or ''})
 
+    list_path = CACHE / 'lists' / 'busiest_routes.html.gz'
+    list_rows = busiest_list_rows(list_path) if list_path.exists() else []
     unresolved = {l['dest_title'] for l in listings if l['dest_title'] not in title_to_iata}
+    unresolved |= {t for row in list_rows for t in row['titles'] if t not in title_to_iata}
     unresolved |= {t for row in stats for t in row['titles'] if t not in title_to_iata}
     unresolved |= {l['airline_title'] for l in listings if l['airline_title']}
     redirects = resolve_redirects(unresolved, CACHE / 'redirects.json')
@@ -397,6 +435,22 @@ def main():
         writer.writeheader()
         writer.writerows(row for row in stats if row['dest'])
     print(f'{len(stats)} busiest-route rows, {sum(1 for r in stats if r["dest"])} resolved to an airport')
+
+    # Wikipedia's list of the world's busiest routes: the first two links that are airports
+    resolved = []
+    for row in list_rows:
+        codes = []
+        for t in row['titles']:
+            code = title_to_iata.get(norm_title(t)) or title_to_iata.get(norm_title(redirects.get(t, '')))
+            if code and code not in codes:
+                codes.append(code)
+        if len(codes) >= 2:
+            resolved.append(dict(row, a=codes[0], b=codes[1]))
+    with open(BUILD / 'list_routes.csv', 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['a', 'b', 'value', 'year', 'basis', 'table'], extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(resolved)
+    print(f'{len(list_rows)} rows in the list of busiest routes, {len(resolved)} resolved to two airports')
 
     fields = ['origin', 'dest', 'airline', 'airline_title', 'mode', 'status', 'note', 'dest_title', 'dest_name']
     with open(BUILD / 'wiki_routes.csv', 'w', newline='') as f:

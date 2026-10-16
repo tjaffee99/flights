@@ -58,6 +58,8 @@ NATIONAL = {'us_bts_t100': {'US', 'PR', 'VI', 'GU', 'AS', 'MP'}, 'uk_caa': {'GB'
 # Singapore): a pair from these is only a route if Wikipedia lists it as nonstop.
 THROUGH = {'au_bitre_intl'}
 REPORTED = 'reported'         # source key for counts from Wikipedia's busiest-routes tables
+LISTED = 'busiest_list'       # ... from Wikipedia's list of the world's busiest routes (passengers)
+LISTED_SEATS = 'busiest_list_seats'   # ... the same list's seat counts, as passengers
 ESTIMATE = 'estimate'
 # A counted route Wikipedia doesn't list must look like a schedule, not charters, diversions or
 # repositioning flights: about weekly or more in at least one direction, or (for sources without
@@ -69,7 +71,7 @@ STALE_MONTHS = 9              # data ending longer ago than this needs Wikipedia
 USABLE_YEARS = {2019} | set(range(2023, 2100))
 # An airport's yearly total sets its size, and the scale its estimated routes are fitted to. An older
 # figure (Iran's are from 2017) is far better than none, as long as it isn't from the pandemic.
-TOTAL_YEARS = set(range(2015, 2020)) | set(range(2023, 2100))
+TOTAL_YEARS = set(range(2010, 2020)) | set(range(2023, 2100))
 airlines_seen = {}            # airline key -> the name most listings give it (filled by load_wikipedia)   # yearly figures to use (not the pandemic years)
 
 
@@ -119,7 +121,7 @@ def load_airports():
     return airports, countries
 
 
-def load_wikipedia(airports):
+def load_wikipedia(airports, overrides):
     """Routes flying now by unordered airport pair, routes that have stopped, listings per airport,
     infobox totals, and the airports whose pages list routes. Also sets each airport's 'label', the
     name other airports' route tables most often give it ("Caracas", "Tokyo–Haneda")."""
@@ -137,9 +139,22 @@ def load_wikipedia(airports):
         title = row.get('airline_title') or ''
         return (title if title and 'redlink=1' not in title and not title.startswith('List of') else 'name:' + name), name
 
+    # an airport replaced by a new one: listings that still name the old one mean the new one
+    moved = {m['from']: m for m in overrides.get('moved_airports', [])}
+    def place(row):
+        for end, other in (('origin', 'dest'), ('dest', 'origin')):
+            rule = moved.get(row[end])
+            if rule and row[other] in airports and not (rule.get('international_only') and airports[row[other]]['cc'] == airports[row[end]]['cc']):
+                row[end] = rule['to']
+        return row
+    # airlines whose own article says they've stopped flying (fetch_airline_status.py)
+    status_path = BUILD / 'airline_status.json'
+    gone = {t for t, s in json.loads(status_path.read_text()).items() if s['defunct']} if status_path.exists() else set()
     with open(BUILD / 'wiki_routes.csv', newline='') as f:
-        rows = [row for row in csv.DictReader(f)
-                if row['dest'] and row['origin'] != row['dest'] and row['origin'] in airports and row['dest'] in airports]
+        rows = [place(row) for row in csv.DictReader(f)
+                if row['dest'] and row['origin'] != row['dest'] and row['origin'] in airports and row['dest'] in airports
+                and (row.get('airline_title') or '') not in gone]
+    rows = [row for row in rows if row['origin'] != row['dest']]
     # An airline one airport lists as suspended or ended isn't flying the route, even if the other
     # airport's page still lists it (Frankfurt still had Lufthansa to Tehran, which Tehran's page has
     # as suspended). The note is the newer edit.
@@ -270,6 +285,38 @@ def load_reported(airports, today):
         for v, a in same:
             per_page.setdefault(a, v)
         out[key] = {'pax': sum(per_page.values()) / len(per_page), 'year': latest, 'by': set(per_page)}
+    return out
+
+
+def load_listed(measured):
+    """Wikipedia's "List of busiest passenger air routes" (Beijing–Shanghai, Delhi–Mumbai, Hanoi–
+    Ho Chi Minh City...), as passengers by pair. Seat counts become passengers at the load factor the
+    table's routes show where official counts exist (0.8 if too few do); a table of passengers that
+    comes out at half the official counts counts one direction, and is doubled."""
+    path = BUILD / 'list_routes.csv'
+    if not path.exists():
+        return {}
+    by_table = defaultdict(list)
+    with open(path, newline='') as f:
+        for row in csv.DictReader(f):
+            by_table[row['table']].append(row)
+    out = {}
+    print('List of busiest routes, by table (factor applied, routes checked against official counts):')
+    # passenger counts first, so a route in a table of seats too keeps its passenger count
+    for table, rows in sorted(by_table.items(), key=lambda kv: kv[1][0]['basis'] == 'seats'):
+        seats = rows[0]['basis'] == 'seats'
+        ratios = [(measured[k]['ab'] + measured[k]['ba']) / float(r['value'])
+                  for r in rows if (k := tuple(sorted((r['a'], r['b'])))) in measured]
+        median = float(np.median(ratios)) if len(ratios) >= 3 else None
+        if seats:
+            factor = median if median and 0.5 < median < 1.0 else 0.8
+        else:
+            factor = 2.0 if median and 1.6 < median < 2.5 else 1.0
+        print(f'  {table[:60]:60} x{factor:.2f} ({len(ratios)})')
+        for r in rows:
+            key = tuple(sorted((r['a'], r['b'])))
+            if r['a'] != r['b'] and key not in out:
+                out[key] = {'pax': float(r['value']) * factor, 'year': int(r['year']), 'source': LISTED_SEATS if seats else LISTED}
     return out
 
 
@@ -407,11 +454,30 @@ def calibrate(priors, fixed_at, targets, rounds=80):
         for x, want in goal.items():
             have = sum(priors[k] * f[k[0]] * f[k[1]] for k in by_airport[x])
             if have > 0:
-                f[x] = min(5.0, max(0.2, f[x] * (want / have) ** 0.7))
+                f[x] = min(5.0, max(0.05, f[x] * (want / have) ** 0.7))
     return {k: v * f[k[0]] * f[k[1]] for k, v in priors.items()}, goal
 
 
-def estimate(fixed, wiki, model, totals, covered, national, train_sources):
+def eurostat_withheld():
+    """Airports (both ends) of routes whose yearly passenger count Eurostat withholds as confidential
+    (every Norwegian domestic route, for one), from its cached yearly tables."""
+    icao = {}
+    with open(CACHE / 'airports.csv', newline='') as f:
+        for row in csv.DictReader(f):
+            if row['iata_code'].strip():
+                for code in {row['icao_code'], row['gps_code'], row['ident']} - {''}:
+                    icao.setdefault(code, row['iata_code'].strip())
+    out = set()
+    for path in (CACHE / 'eurostat').glob('avia_par_*_A_*.csv'):
+        with open(path, newline='') as f:
+            for row in csv.DictReader(f):
+                if row['tra_meas'].startswith('PAS_BRD') and not row['OBS_VALUE'] and row['CONF_STATUS'].startswith('C'):
+                    parts = row['airp_pr'].split('_')
+                    out |= {icao[c] for c in parts[1::2] if c in icao}
+    return out
+
+
+def estimate(fixed, wiki, model, totals, covered, national, train_sources, withheld=frozenset()):
     """Estimates for every Wikipedia route without a count, given the counted routes `fixed`."""
     keys = [k for k, r in fixed.items() if k in wiki and r['source'] in train_sources]
     model.fit(keys, wiki, [math.log(fixed[k]['ab'] + fixed[k]['ba']) for k in keys])
@@ -423,8 +489,10 @@ def estimate(fixed, wiki, model, totals, covered, national, train_sources):
     # An airport a national source counts in full has no routes left to fit. Eurostat airports can:
     # it withholds confidential routes (all of Norway's domestic ones), so where the counts fall well
     # short of the airport's total, the estimated routes there make up the rest.
+    # Only there: where nothing is withheld, a shortfall is old or differently counted traffic
+    # (Umeå's 2019 total, from before Swedish domestic flying shrank), not missing routes.
     targets = {x: t for x, (t, year) in totals.items() if year in TOTAL_YEARS
-               and (x not in covered or (x not in national and fixed_at[x] < 0.75 * t))}
+               and (x not in covered or (x in withheld and x not in national and fixed_at[x] < 0.75 * t))}
     return calibrate(priors, fixed_at, targets)
 
 
@@ -434,10 +502,10 @@ def main():
     today = dt.date.today()
     this_month = today.year * 12 + today.month - 1
     airports, countries = load_airports()
-    wiki, stopped, resuming, listings, totals, pages = load_wikipedia(airports)
+    overrides = json.loads((HERE / 'overrides.json').read_text())
+    wiki, stopped, resuming, listings, totals, pages = load_wikipedia(airports, overrides)
     measured, measured_sources, covered_by = load_measured(airports)
     reported = check_reported(load_reported(airports, today), measured, airports)
-    overrides = json.loads((HERE / 'overrides.json').read_text())
     covered = set().union(*covered_by.values()) if covered_by else set()
     print(f'Wikipedia: {len(wiki)} current routes; official counts: {len(measured)} pairs '
           f'({len(covered)} airports fully counted); busiest-routes tables: {len(reported)} pairs')
@@ -485,6 +553,16 @@ def main():
             routes[key] = {'ab': r['pax'] / 2, 'ba': r['pax'] / 2, 'source': REPORTED, 'months': 0, 'year': r['year']}
             used += 1
     print(f'  {used} routes from busiest-routes tables')
+    listed = load_listed(measured)
+    used = 0
+    for key, r in listed.items():
+        if key in wiki and key not in routes:
+            routes[key] = {'ab': r['pax'] / 2, 'ba': r['pax'] / 2, 'source': r['source'], 'months': 0, 'year': r['year']}
+            used += 1
+    print(f'  {used} routes from the list of busiest routes')
+
+    withheld = eurostat_withheld()
+    print(f'  {len(withheld)} airports have routes Eurostat withholds as confidential')
 
     # --- how good are the estimates? Hide each official source, estimate its routes, compare.
     print('Estimates checked against official counts they did not see:')
@@ -496,7 +574,7 @@ def main():
         guesses, _ = estimate(rest, wiki, Model(airports, listings, totals), totals,
                               set().union(*(v for s, v in covered_by.items() if s != held)),
                               set().union(*(v for s, v in covered_by.items() if s != held and s in NATIONAL)),
-                              set(SOURCE_PRIORITY) - {held})
+                              set(SOURCE_PRIORITY) - {held}, withheld)
         keys = [k for k in hidden if k in guesses]
         median, weighted, p80 = log_error([guesses[k] for k in keys], [hidden[k]['ab'] + hidden[k]['ba'] for k in keys])
         print(f'  {SHORT_NAMES[held]:12s} {len(keys):6d} routes: median off by x{median:.2f}, '
@@ -505,7 +583,7 @@ def main():
     # --- estimate every Wikipedia route without a count
     model = Model(airports, listings, totals)
     national = set().union(*(v for s, v in covered_by.items() if s in NATIONAL))
-    estimates, goal = estimate(routes, wiki, model, totals, covered, national, set(SOURCE_PRIORITY))
+    estimates, goal = estimate(routes, wiki, model, totals, covered, national, set(SOURCE_PRIORITY), withheld)
     print(f'Estimated {len(estimates)} routes; calibrated to the totals of {len(goal)} airports')
     for key, pax in estimates.items():
         routes[key] = {'ab': pax / 2, 'ba': pax / 2, 'source': ESTIMATE, 'months': 0, 'year': 0}
@@ -513,10 +591,12 @@ def main():
     # --- hard rules
     closed = set(overrides['closed_countries'])
     blocked = [(set(rule['a']), set(rule['b'])) for rule in overrides['blocked_country_pairs']]
+    blocked_routes = {tuple(sorted(rule['pair'])) for rule in overrides.get('blocked_routes', [])}
     removed = []
     for key in list(routes):
         ca, cb = (airports[x]['cc'] for x in key)
-        if ca in closed or cb in closed or any((ca in s and cb in t) or (cb in s and ca in t) for s, t in blocked):
+        if (ca in closed or cb in closed or key in blocked_routes
+                or any((ca in s and cb in t) or (cb in s and ca in t) for s, t in blocked)):
             removed.append('-'.join(key))
             del routes[key]
     if removed:
@@ -616,12 +696,16 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides)
                             'directional': bool(s.get('directional', True))})
     source_list.append({'id': len(source_list), 'key': REPORTED, 'short': 'airport statistics',
                         'name': "The airport's published statistics, from its Wikipedia page"})
+    source_list.append({'id': len(source_list), 'key': LISTED, 'short': 'list of busiest routes',
+                        'name': "Wikipedia's list of the busiest passenger air routes"})
+    source_list.append({'id': len(source_list), 'key': LISTED_SEATS, 'short': 'list of busiest routes (seats)',
+                        'name': "Seats in Wikipedia's list of the busiest passenger air routes, at the load factor of its counted routes"})
     source_id = {s['key']: s['id'] for s in source_list}
 
     out = {'a': [], 'b': [], 'ab': [], 'ba': [], 'src': [], 'al': [], 's': [], 'n': [], 'y': []}
     for key in sorted(routes, key=lambda k: -(routes[k]['ab'] + routes[k]['ba'])):
         r = routes[key]
-        rough = r['source'] in (ESTIMATE, REPORTED)
+        rough = r['source'] in (ESTIMATE, REPORTED, LISTED, LISTED_SEATS)
         digits = lambda v: int(round(v, -2)) if rough and v >= 1000 else int(round(v))
         p = wiki.get(key)
         out['a'].append(index[key[0]])

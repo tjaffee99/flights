@@ -191,6 +191,15 @@ def main():
         todo = {k: v for k, v in todo.items() if k in wanted}
     (CACHE / 'wiki_titles.json').write_text(json.dumps(todo, ensure_ascii=False, indent=0))
 
+    # Wikipedia's list of the busiest routes, kept whole (cache/lists/)
+    lists = CACHE / 'lists'
+    lists.mkdir(exist_ok=True)
+    if args.refresh or not (lists / 'busiest_routes.html.gz').exists():
+        page = polite_get('https://en.wikipedia.org/wiki/List_of_busiest_passenger_air_routes')
+        if page:
+            with gzip.open(lists / 'busiest_routes.html.gz', 'wt', encoding='utf-8') as f:
+                f.write(page)
+
     counts = {}
     done = 0
     with ThreadPoolExecutor(WORKERS) as pool:

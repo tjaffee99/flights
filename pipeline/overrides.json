@@ -4,7 +4,90 @@
     "UA": "Ukrainian airspace has been closed to civil flights since February 2022."
   },
   "blocked_country_pairs": [
-    { "a": ["RU", "BY"], "b": ["US", "CA", "GB", "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "NO", "IS", "CH"],
-      "why": "The US, Canada, the UK, the EU, Norway, Iceland and Switzerland closed their airspace to Russian (and Belarusian) airlines in 2021–22, and their own airlines stopped flying there." }
+    {
+      "a": [
+        "RU",
+        "BY"
+      ],
+      "b": [
+        "US",
+        "CA",
+        "GB",
+        "AT",
+        "BE",
+        "BG",
+        "HR",
+        "CY",
+        "CZ",
+        "DK",
+        "EE",
+        "FI",
+        "FR",
+        "DE",
+        "GR",
+        "HU",
+        "IE",
+        "IT",
+        "LV",
+        "LT",
+        "LU",
+        "MT",
+        "NL",
+        "PL",
+        "PT",
+        "RO",
+        "SK",
+        "SI",
+        "ES",
+        "SE",
+        "NO",
+        "IS",
+        "CH"
+      ],
+      "why": "The US, Canada, the UK, the EU, Norway, Iceland and Switzerland closed their airspace to Russian (and Belarusian) airlines in 2021–22, and their own airlines stopped flying there."
+    },
+    {
+      "a": [
+        "IL"
+      ],
+      "b": [
+        "TR"
+      ],
+      "why": "Turkish airlines stopped flying to Israel in late 2023, and Israeli airlines don't fly to Turkey."
+    }
+  ],
+  "blocked_routes": [
+    {
+      "pair": [
+        "CDG",
+        "OUA"
+      ],
+      "why": "Air France suspended Ouagadougou in August 2023 and hasn't returned; Ouagadougou's page still lists it."
+    },
+    {
+      "pair": [
+        "CDG",
+        "NIM"
+      ],
+      "why": "Air France suspended Niamey in August 2023, when Niger closed its airspace to French airlines; Niamey's page still lists it."
+    }
+  ],
+  "moved_airports": [
+    {
+      "from": "LAD",
+      "to": "NBJ",
+      "international_only": true,
+      "why": "Luanda's international flights moved to the new Dr. António Agostinho Neto airport; other airports' pages still name the old one, which keeps domestic and private flights."
+    },
+    {
+      "from": "PNH",
+      "to": "KTI",
+      "why": "Techo International replaced Phnom Penh International in September 2025."
+    },
+    {
+      "from": "DIA",
+      "to": "DOH",
+      "why": "Hamad International replaced the old Doha International for airline flights in 2014."
+    }
   ]
 }

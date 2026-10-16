@@ -42,6 +42,11 @@ destinations" table, kept current by editors, with notes such as *begins 1 Novem
 - *resumes* a future date: left out unless the route is seasonal or the official counts show it
   flying this year
 - *Dubai (via Muscat)*: not a nonstop route, so left out
+- tables of routes as they were ("International service before 1994", "Previously served
+  airlines") are skipped, wherever they sit in the article
+- an airline whose own Wikipedia article says it has ceased operations (Royal Air Philippines,
+  flybig, Fly540…) is taken off every route, however many airport pages still list it
+  (`pipeline/fetch_airline_status.py`)
 - a destination is matched to its IATA code through its article. Wikidata now and then gives a
   small field another airport's code (an Indonesian airstrip with La Crosse's LSE), so a code is
   only taken when OurAirports agrees on the airport
@@ -56,9 +61,11 @@ flights, like the three Delta flights a year between Tallahassee and Los Angeles
 statistics show stopping, which Wikipedia doesn't list either, are dropped.
 So Miami–Caracas, which American restarted in April 2026, is on the map.
 
-`pipeline/overrides.json` holds the hard rules that override every source: no flights touching
-Ukraine, and none between Russia or Belarus and the US, Canada, the UK, the EU, Norway, Iceland or
-Switzerland.
+`pipeline/overrides.json` holds the hard rules that override every source, each with its reason:
+no flights touching Ukraine; none between Russia or Belarus and the US, Canada, the UK, the EU,
+Norway, Iceland or Switzerland; none between Israel and Turkey; Air France's suspended Ouagadougou
+and Niamey flights; and airports replaced by new ones (Luanda's international flights, Phnom Penh,
+the old Doha airport), so that listings naming the old one count for the new.
 
 ## How many passengers
 
@@ -82,6 +89,11 @@ Each route's count comes from the best source that has it:
    counts exist for the same routes, the tables are checked against them country by country. US
    and Mexican tables turn out to count one direction only, so their figures are doubled. Swiss
    tables disagree, so they are not used.
+
+   Then Wikipedia's [List of busiest passenger air routes](https://en.wikipedia.org/wiki/List_of_busiest_passenger_air_routes),
+   for the big routes no airport table covers (Beijing–Shanghai, Delhi–Mumbai, Hanoi–Ho Chi Minh
+   City, Jeddah–Riyadh). Its seat counts become passengers at the load factor its officially
+   counted routes show, or 0.8.
 3. **Estimates** for everything else (`pipeline/build_routes.py`):
    - A regression fitted on the official counts predicts a route's passengers from what Wikipedia
      says about it: how big its two airports are, how many airlines fly it and which, the distance,
@@ -91,18 +103,19 @@ Each route's count comes from the best source that has it:
      giant.
    - Each airport's estimated routes are then scaled so that, with its counted routes, they add up
      to the airport's annual passenger total from its Wikipedia infobox. Every route has two
-     airports, so this is iterative proportional fitting. Totals from 2015–2019 or 2023 on are
+     airports, so this is iterative proportional fitting. Totals from 2010–2019 or 2023 on are
      used (not the pandemic years); a part-year figure ("September to December 2025", for an
      airport that opened then) is scaled up to a year, and Indian figures written in lakhs and
      crores ("3,04,83,885") are read as such.
-   - Eurostat withholds some routes as confidential (all of Norway's domestic ones). Where an
-     airport's counted routes fall well short of its total, its estimated routes make up the rest.
+   - Eurostat withholds some routes as confidential (all of Norway's domestic ones). At the
+     airports where it does, and the counted routes fall well short of the total, the estimated
+     routes make up the rest.
 
    To check the estimates, the build hides each official source in turn and estimates its routes
    from scratch. The typical (median) route comes out within a factor of about 1.6–1.7 of the
    real count. That's good enough to tell a 50K route from a 500K one, not 400K from 500K.
 
-Counted routes cover about 57% of the 5 billion passengers a year on the map. Estimates are
+Counted routes cover about 59% of the 5 billion passengers a year on the map. Estimates are
 marked with ≈ in the panel.
 
 **Airlines** are the ones each airport's Wikipedia table lists for a route, identified by the
@@ -137,13 +150,14 @@ cd pipeline
 python3 build_measured.py              # official statistics (see MEASURED.md for options)
 python3 fetch_wikipedia.py --refresh   # ~4,100 airport articles; takes about an hour
 python3 parse_wikipedia.py             # current routes, airport totals, busiest-routes tables
+python3 fetch_airline_status.py        # which airlines have stopped flying, from their articles
 python3 fetch_logos.py                 # airline logos from Wikidata / Wikimedia Commons
 python3 build_routes.py                # writes ../data/flights.json and others.json, prints the checks
 ```
 
 ## Sources and licenses
 
-- Routes, airport totals and busiest-routes tables: [Wikipedia](https://en.wikipedia.org/), CC BY-SA 4.0
+- Routes, airport totals, busiest-routes tables, the list of the busiest routes and which airlines still fly: [Wikipedia](https://en.wikipedia.org/), CC BY-SA 4.0
 - Airport names and locations: [OurAirports](https://ourairports.com/data/), public domain
 - US: [Bureau of Transportation Statistics](https://www.transtats.bts.gov/), public domain
 - UK: [Civil Aviation Authority](https://www.caa.co.uk/data-and-analysis/uk-aviation-market/airports/uk-airport-data/)
