@@ -74,7 +74,16 @@ So Miami–Caracas, which American restarted in April 2026, is on the map.
 no flights touching Ukraine; none between Russia or Belarus and the US, Canada, the UK, the EU,
 Norway, Iceland or Switzerland; none between Israel and Turkey; Air France's suspended Ouagadougou
 and Niamey flights; and airports replaced by new ones (Luanda's international flights, Phnom Penh,
-the old Doha airport), so that listings naming the old one count for the new.
+the old Doha airport), so that listings naming the old one count for the new. Two more lists catch
+airports whose Wikipedia tables outlived them:
+
+- closed airports: Russia's airports near Ukraine, shut since February 2022 and not reopened
+  (Belgorod, Voronezh, Kursk, Rostov-on-Don, Anapa, Bryansk, Lipetsk, Simferopol), though some
+  pages still list flights to them (Bovanenkovo's lists Yamal Airlines to Belgorod; Voronezh's own
+  page lists eighteen routes)
+- airports reopened only in part: Khartoum, closed by the war in 2023 and reopened in 2026 for a
+  few flights, keeps only the routes and airlines reported flying (Port Sudan, Cairo, Istanbul on
+  Sudanese airlines), and its 2017 passenger total isn't used to scale the estimates
 
 ## How many passengers
 

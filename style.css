@@ -191,6 +191,10 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 #optsbtn[aria-expanded="true"]{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
 .mapopts{display:flex;flex-direction:column;gap:2px;padding:4px 2px 0}
 .mapopts[hidden]{display:none}
+/* with the options open, the list below gives up its room first, then the options scroll */
+#panel.with-options .phead{flex:0 1 auto;min-height:0}
+#panel.with-options .mapopts{min-height:0;overflow-y:auto;overscroll-behavior:contain;margin-right:-6px;padding-right:6px}
+#panel.with-options #body{flex-shrink:1000}
 .orow{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px;font-size:13px}
 .orow>span:first-child{color:var(--ink2)}
 .orow .chipset{display:inline-flex;gap:6px}

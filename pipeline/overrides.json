@@ -3,6 +3,34 @@
   "closed_countries": {
     "UA": "Ukrainian airspace has been closed to civil flights since February 2022."
   },
+  "closed_airports": {
+    "_comment": "Airports with no flights though some Wikipedia pages still list routes to them; routes touching them are dropped. Russia's southern airports closed in February 2022 and not reopened as of October 2026 (Krasnodar reopened in 2025, Elista and Gelendzhik in 2024): Ural Airlines' list of closed airports and russiable.com.",
+    "AAQ": "Closed since February 2022, when Russia shut its airports near Ukraine.",
+    "EGO": "Closed since February 2022, when Russia shut its airports near Ukraine.",
+    "BZK": "Closed since February 2022, when Russia shut its airports near Ukraine.",
+    "VOZ": "Closed since February 2022, when Russia shut its airports near Ukraine.",
+    "URS": "Closed since February 2022, when Russia shut its airports near Ukraine.",
+    "LPK": "Closed since February 2022, when Russia shut its airports near Ukraine.",
+    "ROV": "Closed since February 2022, when Russia shut its airports near Ukraine.",
+    "SIP": "Closed since February 2022, when Russia shut its airports near Ukraine (Simferopol is in Crimea)."
+  },
+  "limited_airports": {
+    "_comment": "Airports reopened only in part after a closure, whose Wikipedia tables and passenger totals still describe them before it: only the routes and airlines reported flying are kept, the old total isn't used to scale estimates, and the airport's page says why.",
+    "KRT": {
+      "note": "Closed by the war in April 2023. Domestic flights resumed in February 2026, and a few international ones from April (Sudanair to Cairo, Badr Airlines to Istanbul); Port Sudan is still Sudan's main gateway.",
+      "routes": [
+        "PZU",
+        "CAI",
+        "IST"
+      ],
+      "airlines": [
+        "Badr Airlines",
+        "Sudan Airways",
+        "Tarco Aviation",
+        "Nova Airways"
+      ]
+    }
+  },
   "blocked_country_pairs": [
     {
       "a": [

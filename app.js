@@ -982,7 +982,7 @@ const CHEVRON = '<svg class="chev" viewBox="0 0 10 6" fill="none" stroke="curren
 function airportView(x, al = null) {
   if (x.other) return `${backButton()}
   <div class="dhead other">${codeTag(x.code, 'big')}<div><h2>${titleLink(x)}</h2><div class="sub">${esc(place(x))}</div></div></div>
-  <div class="note">No scheduled airline flights. ${esc((D.closed && D.closed[x.cc]) ||
+  <div class="note">No scheduled airline flights. ${esc((D.closedAirports && D.closedAirports[x.code]) || (D.closed && D.closed[x.cc]) ||
     'Airports like this one serve private planes, air taxis, the military, or have closed or not yet opened.')}</div>`;
   const all = x.routes.map(i => R[i]);
   const routes = al === null ? all : all.filter(r => r.airlines.includes(al));
@@ -1002,6 +1002,7 @@ function airportView(x, al = null) {
     <div class="als">${byRoutes.map(([k, n]) => airlineChip(AL[k], n, 'data-only', k === al)).join('')}</div></div></div>` : '';
   return `${backButton()}
   <div class="dhead">${codeTag(x.code, 'big')}<div><h2>${titleLink(x)}</h2><div class="sub">${esc(place(x))}</div>${cityLink(x)}</div></div>
+  ${D.airport_notes && D.airport_notes[x.code] ? `<div class="note small">${esc(D.airport_notes[x.code])}</div>` : ''}
   ${filter}
   <div class="stats"><div><b>${(est > pax / 2 ? '≈ ' : '') + fmtPax(pax)}</b><span>${al === null ? 'passengers a year' : 'on these routes'}</span></div>
     <div><b>${routes.length}</b><span>nonstop destinations</span></div><div><b>${countries.size}</b><span>countries</span></div></div>
@@ -1493,6 +1494,7 @@ $('#reopen').addEventListener('click', () => { setCollapsed(false); $('#q').focu
 $('#optsbtn').addEventListener('click', () => {
   const open = $('#mapopts').hidden;
   $('#mapopts').hidden = !open;
+  panel.classList.toggle('with-options', open);   // the options scroll when they're taller than the panel
   $('#optsbtn').setAttribute('aria-expanded', String(open));
   if (open && phone() && sheet.state === 'peek') setSheet('half');
 });
@@ -1527,7 +1529,9 @@ let drag = null;
 panel.addEventListener('touchstart', e => {
   if (!phone() || e.touches.length !== 1) { drag = null; return; }
   const y = e.touches[0].clientY;
-  drag = { y0: y, h0: panel.offsetHeight, list: body.contains(e.target), on: false, moves: [[e.timeStamp, y]] };
+  // the route list and the map options scroll; anywhere else drags the sheet
+  const scroller = body.contains(e.target) ? body : $('#mapopts').contains(e.target) ? $('#mapopts') : null;
+  drag = { y0: y, h0: panel.offsetHeight, list: scroller, on: false, moves: [[e.timeStamp, y]] };
 }, { passive: true });
 panel.addEventListener('touchmove', e => {
   if (!drag) return;
@@ -1535,7 +1539,7 @@ panel.addEventListener('touchmove', e => {
   if (!drag.on) {
     if (!dy) return;
     // the list keeps the swipes it can use: up once the sheet is all the way up, down when scrolled
-    if (drag.list && (dy < 0 ? sheet.state === 'full' : body.scrollTop > 0)) { drag = null; return; }
+    if (drag.list && (dy < 0 ? sheet.state === 'full' : drag.list.scrollTop > 0)) { drag = null; return; }
     drag.on = true;
     panel.classList.add('dragging');
     if (document.activeElement === $('#q')) $('#q').blur();
@@ -1653,6 +1657,7 @@ function loadOthers() {
   fetch('data/others.json').then(r => r.json()).then(o => {
     Object.assign(D.countries, o.countries);
     D.closed = o.closed || {};
+    D.closedAirports = o.closed_airports || {};
     const features = o.code.map((code, k) => {
       const x = { i: A.length, code, name: o.name[k], city: o.city[k], town: '', cc: o.country[k],
                   lat: o.lat[k], lon: o.lon[k], pax: 0, routes: [], ground: [], other: true, wiki: wikiTitle(o.wiki && o.wiki[k], o.name[k]) };

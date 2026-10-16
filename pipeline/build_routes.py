@@ -552,6 +552,15 @@ def main():
     airports, countries = load_airports()
     overrides = json.loads((HERE / 'overrides.json').read_text())
     wiki, stopped, resuming, listings, totals, pages = load_wikipedia(airports, overrides)
+    # airports reopened in part: their totals are from before (Khartoum's is 2017's)
+    limited = {c: v for c, v in overrides.get('limited_airports', {}).items() if not c.startswith('_')}
+    for c, rule in limited.items():
+        totals.pop(c, None)
+        for key in [k for k in wiki if c in k]:   # and their tables still list airlines that left
+            if rule.get('airlines'):
+                wiki[key]['airlines'] = {a for a in wiki[key]['airlines'] if airlines_seen.get(a, a) in rule['airlines']}
+            if not wiki[key]['airlines']:
+                del wiki[key]
     measured, measured_sources, covered_by = load_measured(airports)
     reported = check_reported(load_reported(airports, today), measured, airports)
     covered = set().union(*covered_by.values()) if covered_by else set()
@@ -646,12 +655,14 @@ def main():
 
     # --- hard rules
     closed = set(overrides['closed_countries'])
+    shut = {c for c in overrides.get('closed_airports', {}) if not c.startswith('_')}
     blocked = [(set(rule['a']), set(rule['b'])) for rule in overrides['blocked_country_pairs']]
     blocked_routes = {tuple(sorted(rule['pair'])) for rule in overrides.get('blocked_routes', [])}
     removed = []
     for key in list(routes):
         ca, cb = (airports[x]['cc'] for x in key)
-        if (ca in closed or cb in closed or key in blocked_routes
+        if (ca in closed or cb in closed or key in blocked_routes or shut & set(key)
+                or any(x in limited and y not in limited[x]['routes'] for x, y in (key, key[::-1]))
                 or any((ca in s and cb in t) or (cb in s and ca in t) for s, t in blocked)):
             removed.append('-'.join(key))
             del routes[key]
@@ -983,6 +994,8 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides,
         'time_model': TIME_MODEL,
         'airspace': [{'name': r['name'], 'source': r['source']} for r in overrides.get('airspace', {}).get('rules', [])],
         'airspace_as_of': overrides.get('airspace', {}).get('as_of', ''),
+        # why an airport has fewer routes than its Wikipedia page lists
+        'airport_notes': {c: v['note'] for c, v in overrides.get('limited_airports', {}).items() if not c.startswith('_') and c in index},
         'ground': ground_links(routes, airports, used),
         # cities with several airports: name, country, airports (indices, busiest first)
         'cities': [{'name': c['name'], 'cc': c['cc'], 'airports': [index[x] for x in c['airports']]}
@@ -1019,6 +1032,7 @@ def write_others(used, countries, titles, overrides):
         'wiki': ['' if titles.get(c, '') == others[c]['name'] else titles.get(c, '-') for c in codes],
         'countries': {cc: countries.get(cc, cc) for cc in sorted({others[c]['iso_country'] for c in codes})},
         'closed': overrides['closed_countries'],
+        'closed_airports': {c: note for c, note in overrides.get('closed_airports', {}).items() if not c.startswith('_')},
     }
     path = OUT.parent / 'others.json'
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')))
