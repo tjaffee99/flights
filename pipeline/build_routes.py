@@ -75,7 +75,7 @@ USABLE_YEARS = {2019} | set(range(2023, 2100))
 # An airport's yearly total sets its size, and the scale its estimated routes are fitted to. An older
 # figure (Iran's are from 2017) is far better than none, as long as it isn't from the pandemic.
 TOTAL_YEARS = set(range(2010, 2020)) | set(range(2023, 2100))
-airlines_seen = {}            # airline key -> the name most listings give it (filled by load_wikipedia)   # yearly figures to use (not the pandemic years)
+airlines_seen = {}            # airline key -> the name most listings give it (filled by load_wikipedia)
 
 
 def month_index(ym):
@@ -561,6 +561,7 @@ def main():
                 wiki[key]['airlines'] = {a for a in wiki[key]['airlines'] if airlines_seen.get(a, a) in rule['airlines']}
             if not wiki[key]['airlines']:
                 del wiki[key]
+    drop_suspended(wiki, airports, overrides)
     measured, measured_sources, covered_by = load_measured(airports)
     reported = check_reported(load_reported(airports, today), measured, airports)
     covered = set().union(*covered_by.values()) if covered_by else set()
@@ -736,6 +737,44 @@ def ground_links(routes, airports, used):
     return links
 
 
+def airline_homes(wiki, airports):
+    """Airline key -> its country: the one most of its routes touch (Lufthansa's are German)."""
+    homes = defaultdict(Counter)
+    for (a, b), p in wiki.items():
+        for al in p['airlines']:
+            homes[al][airports[a]['cc']] += 1
+            homes[al][airports[b]['cc']] += 1
+    return {al: c.most_common(1)[0][0] for al, c in homes.items()}
+
+
+def drop_suspended(wiki, airports, overrides):
+    """Take airlines off the routes overrides.json says they've stopped flying though Wikipedia still
+    lists them (an airline that left a country, or an airport): each rule names the airlines (or
+    'foreign': all but the country's own, less any 'except') and where ('at' airports, 'countries').
+    A route with no airline left is gone, unless recent official counts show it flying."""
+    rules = overrides.get('suspended', {}).get('rules', [])
+    if not rules:
+        return
+    home = airline_homes(wiki, airports)
+    named = lambda al: {airlines_seen.get(al, al), al}
+    dropped = Counter()
+    for key in list(wiki):
+        for rule in rules:
+            here = set(rule.get('at', [])) & set(key) or {airports[x]['cc'] for x in key} & set(rule.get('countries', []))
+            if not here:
+                continue
+            if rule['airlines'] == 'foreign':
+                gone = {al for al in wiki[key]['airlines'] if home.get(al) not in rule.get('countries', [])
+                        and not named(al) & set(rule.get('except', []))}
+            else:
+                gone = {al for al in wiki[key]['airlines'] if named(al) & set(rule['airlines'])}
+            wiki[key]['airlines'] -= gone
+            dropped[rule['name']] += len(gone)
+        if not wiki[key]['airlines']:
+            del wiki[key]
+    print('Suspended per overrides.json: ' + ', '.join(f'{name} ({n} listings)' for name, n in dropped.items()))
+
+
 def flight_ways(routes, wiki, airports, overrides):
     """The way each route is flown, around the airspace its airlines avoid (overrides.json's 'airspace'):
     unordered pair -> [{'airlines': [keys], 'km', 'pts': [(lat, lon) waypoints], 'east'}], one for
@@ -748,12 +787,7 @@ def flight_ways(routes, wiki, airports, overrides):
     members = lambda spec: None if spec == 'all' else {c for g in spec for c in groups.get(g, [g])}
     rule_list = [(set(r['avoid']), members(r['airlines'])) for r in rules.get('rules', [])]
     space = Airspace({c for avoid, _ in rule_list for c in avoid}, regions)
-    homes = defaultdict(Counter)
-    for (a, b), p in wiki.items():
-        for al in p['airlines']:
-            homes[al][airports[a]['cc']] += 1
-            homes[al][airports[b]['cc']] += 1
-    home = {al: c.most_common(1)[0][0] for al, c in homes.items()}
+    home = airline_homes(wiki, airports)
 
     def avoided(cc, ends):
         out = set()
