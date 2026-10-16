@@ -4,6 +4,7 @@
   --chip:#EEEEF1; --chip-on:#1C1C1E; --chip-on-ink:#FFFFFF; --hover:rgba(120,120,128,.10);
   --accent:#0A7AFF; --shadow:0 8px 28px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08);
   --route:#2E4FA8; --hot:#E0542E; --field:rgba(118,118,128,.12); --bar:rgba(224,84,46,.16);
+  --c0:#E0542E; --c1:#2F6FD6; --c2:#14967A; --c3:#8B4FC8; --c4:#C38E0F; --c5:#D2407F; --c6:#4B8F2E; --c7:#7A6A58;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
@@ -13,6 +14,7 @@
     --chip:#35363A; --chip-on:#F2F2F7; --chip-on-ink:#1C1C1E; --hover:rgba(160,160,170,.14);
     --accent:#3D9BFF; --shadow:0 8px 28px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4);
     --route:#7FB2FF; --hot:#FF9F5A; --field:rgba(118,118,128,.24); --bar:rgba(255,159,90,.18);
+    --c0:#FF9F5A; --c1:#78AEFF; --c2:#4FD1A8; --c3:#C59BFF; --c4:#F2CF5B; --c5:#FF85B8; --c6:#9BD66B; --c7:#C4B29A;
     color-scheme:dark;
   }
 }
@@ -22,6 +24,7 @@
   --chip:#35363A; --chip-on:#F2F2F7; --chip-on-ink:#1C1C1E; --hover:rgba(160,160,170,.14);
   --accent:#3D9BFF; --shadow:0 8px 28px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4);
   --route:#7FB2FF; --hot:#FF9F5A; --field:rgba(118,118,128,.24); --bar:rgba(255,159,90,.18);
+    --c0:#FF9F5A; --c1:#78AEFF; --c2:#4FD1A8; --c3:#C59BFF; --c4:#F2CF5B; --c5:#FF85B8; --c6:#9BD66B; --c7:#C4B29A;
   color-scheme:dark;
 }
 html,body{height:100%}
@@ -66,6 +69,11 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .row .n small{display:block;font-size:11px;color:var(--ink3)}
 .row .bar{position:absolute;left:16px;bottom:2px;height:3px;max-width:calc(100% - 32px);background:var(--hot);opacity:.55;border-radius:2px;pointer-events:none}
 .row>*:not(.bar){position:relative}
+/* a city's destinations: the bar split by the airports that fly there, each in its color */
+.row .bar.split{display:flex;gap:1px;background:none;opacity:.85;overflow:hidden}
+.row .bar.split i{display:block;height:100%;min-width:2px}
+.row .t b small{font-weight:500;font-size:12px;color:var(--ink3)}
+.row .t em.port{display:inline;font-style:normal;font-weight:700;font-size:11.5px;letter-spacing:.04em}
 /* airport codes: just the letters, tracked out; big and in the highlight color at the head of a view */
 .code{flex:none;width:34px;font-size:12.5px;font-weight:700;line-height:1;letter-spacing:.07em;color:var(--ink2);font-variant-numeric:tabular-nums}
 .code.big{width:auto;font-size:30px;font-weight:800;letter-spacing:.03em;color:var(--hot)}

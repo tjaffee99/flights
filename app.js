@@ -181,13 +181,15 @@ const PAL = {
            bnd:'#B0A99E', bnd4:'#CFC9BF', label:'#6C6C72', city:'#3A3A3C', town:'#6C6C72', halo:'#F2F0EB', space:'#E9E7E1',
            horizon:'#FFFFFF', route:'#2E4FA8', routeOp:.26, faded:'#8E8A84', fadedOp:.07, hot:'#E0542E',
            dot:'#1C1C1E', dotEdge:'#FFFFFF', text:'#1C1C1E', muted:'#7E7E85',
-           reach:['#7E260B', '#B9401C', '#DC6A3A', '#EC9566'], unreached:'#B8B4AD' },
+           reach:['#7E260B', '#B9401C', '#DC6A3A', '#EC9566'], unreached:'#B8B4AD',
+           ports:['#E0542E', '#2F6FD6', '#14967A', '#8B4FC8', '#C38E0F', '#D2407F', '#4B8F2E', '#7A6A58'] },
   dark:  { land:'#2A2C30', water:'#1A1C20', waterLine:'#22252A', urban:'#2F3135', park:'#263027', wood:'#252D26', sand:'#2E2C27', ice:'#33363C',
            airport:'#33333B', apron:'#3A3A43', runway:'#4C4F56', road:'#3D4046', roadCase:'#2C2E32', minor:'#36393E', building:'#34363B', buildingEdge:'#3C3F44',
            bnd:'#6E7177', bnd4:'#46494E', label:'#9A9CA2', city:'#E9E9EE', town:'#A1A1A8', halo:'#1A1C20', space:'#0E0F11',
            horizon:'#3A4352', route:'#7FB2FF', routeOp:.26, faded:'#8A8C92', fadedOp:.06, hot:'#FF9F5A',
            dot:'#F2F2F7', dotEdge:'#1A1C20', text:'#F2F2F7', muted:'#94969C',
-           reach:['#FFC9A3', '#FF9F5A', '#D9773C', '#9E5530'], unreached:'#55585F' },
+           reach:['#FFC9A3', '#FF9F5A', '#D9773C', '#9E5530'], unreached:'#55585F',
+           ports:['#FF9F5A', '#78AEFF', '#4FD1A8', '#C59BFF', '#F2CF5B', '#FF85B8', '#9BD66B', '#C4B29A'] },
 };
 const pal = () => PAL[isDark() ? 'dark' : 'light'];
 
@@ -416,7 +418,12 @@ function polarFocus() {
   if (!S.lines) return [];
   const p = pal(), out = [];
   const focus = POLAR.filter(({ r }) => shown.focus.has(r.i)), hover = POLAR.filter(({ r }) => shown.hover.has(r.i));
-  if (focus.length) out.push(styleOf('focus-halo', p.halo, focus), styleOf('focus', p.hot, focus));
+  if (focus.length) {
+    out.push(styleOf('focus-halo', p.halo, focus));
+    const city = S.view.t === 'city' ? C[S.view.i] : null;
+    if (!city) out.push(styleOf('focus', p.hot, focus));
+    else for (const n of new Set(focus.map(({ r }) => fromSlot(city, r)))) out.push(styleOf('focus', p.ports[n], focus.filter(({ r }) => fromSlot(city, r) === n)));
+  }
   if (hover.length) out.push(styleOf('hover', p.text, hover));
   return out;
 }
@@ -610,8 +617,11 @@ function focusOf(view) {
 function showSelection() {
   if (!map || !map.getSource('focus')) return;
   const p = pal(), on = selecting(), v = S.view;
-  const ids = focusOf(v);
-  map.getSource('focus').setData(collection(ids.map(i => routeGeo.features[i])));
+  const ids = focusOf(v), city = v.t === 'city' ? C[v.i] : null;
+  // a city's routes in the color of the airport they fly from, the less busy over the busier
+  map.getSource('focus').setData(collection(city
+    ? ids.map(i => ({ ...routeGeo.features[i], properties: { ...routeGeo.features[i].properties, o: fromSlot(city, R[i]) } }))
+    : ids.map(i => routeGeo.features[i])));
   shown.focus = new Set(ids);
   const spots = new Map();
   for (const i of ids) for (const k of [R[i].a, R[i].b]) spots.set(k, A[k]);
@@ -619,7 +629,18 @@ function showSelection() {
   const ends = v.t === 'airport' ? [v.i] : v.t === 'trip' ? [v.a, v.b] : v.t === 'city' ? C[v.i].airports
     : v.t === 'pair' ? [...placeAirports(v.a), ...placeAirports(v.b)] : [];
   for (const k of ends) spots.set(k, A[k]);
-  map.getSource('focus-airports').setData(collection([...spots.values()].map(x => point(x, ends.includes(x.i)))));
+  map.getSource('focus-airports').setData(collection([...spots.values()].map(x => {
+    const f = point(x, ends.includes(x.i));
+    if (city && city.airports.includes(x.i)) f.properties.o = slotOf(x.i);
+    return f;
+  })));
+  const byPort = ['match', ['get', 'o'], ...p.ports.flatMap((c, n) => [n, c]), p.hot];
+  map.setPaintProperty('focus', 'line-color', city ? byPort : p.hot);
+  const sortKey = city ? ['-', 0, ['get', 'p']] : ['get', 'p'];
+  if (JSON.stringify(map.getLayoutProperty('focus', 'line-sort-key')) !== JSON.stringify(sortKey)) map.setLayoutProperty('focus', 'line-sort-key', sortKey);
+  map.setPaintProperty('focus-sel', 'circle-color', city ? byPort : p.hot);
+  map.setPaintProperty('focus-dots', 'circle-color', city ? p.dot : p.hot);
+  map.setPaintProperty('focus-label', 'text-color', city ? ['case', ['==', ['get', 'sel'], 1], byPort, p.text] : p.hot);
   const reach = v.t === 'airport' && v.al == null && S.reach && !A[v.i].other;
   map.getSource('reach').setData(reach ? reachGeo(v.i) : EMPTY);
   map.getSource('reach-hi').setData(EMPTY);
@@ -789,6 +810,9 @@ function tripOptions(a, b) {
 }
 // a place is a city with several airports ('c3') or an airport ('a120')
 const placeOf = i => A[i].cityK !== undefined ? 'c' + A[i].cityK : 'a' + i;
+// each of a city's airports has a color, on the map and in the panel (London's Heathrow orange, Gatwick blue …)
+const slotOf = i => C[A[i].cityK].airports.indexOf(i) % 8;
+const fromSlot = (c, r) => slotOf(c.airports.includes(r.a) ? r.a : r.b);
 const placeAirports = key => key[0] === 'c' ? C[+key.slice(1)].airports : [+key.slice(1)];
 const placeName = key => key[0] === 'c' ? C[+key.slice(1)].name : (A[+key.slice(1)].city || A[+key.slice(1)].name);
 function placeRoutes(a, b) {
@@ -1017,33 +1041,47 @@ function airportView(x, al = null) {
 
 // a city's airports together: its destinations, by city where they have several airports
 function cityView(c) {
-  const mine = new Set(c.airports), dest = new Map();
+  const mine = new Set(c.airports), dest = new Map(), reach = new Map(c.airports.map(k => [k, new Set()]));
   for (const i of c.routes) {
     const r = R[i];
     if (mine.has(r.a) && mine.has(r.b)) continue;
-    const key = placeOf(mine.has(r.a) ? r.b : r.a);
-    const d = dest.get(key) || { key, pax: 0, est: 0, routes: [] };
+    const from = mine.has(r.a) ? r.a : r.b, key = placeOf(from === r.a ? r.b : r.a);
+    const d = dest.get(key) || { key, pax: 0, est: 0, routes: [], from: new Map() };
     d.pax += r.pax; d.est += isEst(r) ? r.pax : 0; d.routes.push(i);
+    d.from.set(from, (d.from.get(from) || 0) + r.pax);
     dest.set(key, d);
+    reach.get(from).add(key);
   }
   const list = [...dest.values()].sort((p, q) => q.pax - p.pax), top = list.length ? list[0].pax : 1;
   const pax = c.airports.reduce((s, i) => s + A[i].pax, 0);
   const countries = new Set(list.map(d => A[placeAirports(d.key)[0]].cc));
+  const color = k => `var(--c${slotOf(k)})`;
+  const port = k => `<em class="port" style="color:${color(k)}">${esc(A[k].code)}</em>`;
+  // an airport, in its color, with its share of the city's passengers
+  const portRow = k => {
+    const x = A[k], share = pax ? x.pax / pax : 0;
+    return `<button class="row" data-airport="${k}"><span class="bar" style="background:${color(k)};width:calc((100% - 32px) * ${Math.max(0.01, share).toFixed(3)})"></span>
+      <span class="code" style="color:${color(k)}">${esc(x.code)}</span><span class="t"><b>${esc(x.name)}</b><span>${fmtInt(reach.get(k).size)} destinations</span></span>
+      <span class="n">${fmtPax(x.pax)}<small>${share < 0.005 ? '<1' : Math.round(100 * share)}% of ${esc(c.name)}’s</small></span></button>`;
+  };
+  // a destination, its bar split by the airports that fly there
   const row = d => {
-    const ports = placeAirports(d.key), x = A[ports[0]], city = d.key[0] === 'c';
-    const sub = city ? `${ports.map(i => A[i].code).join(', ')} · ${country(x.cc)}` : `${x.name} · ${country(x.cc)}`;
-    const share = Math.max(2, 100 * d.pax / top);
-    return `<button class="row" data-pair="c${c.k}|${d.key}"><span class="bar" style="width:calc((100% - 32px) * ${(share / 100).toFixed(3)})"></span>
-      ${codeTag(city ? x.code + '+' : x.code)}<span class="t"><b>${esc(placeName(d.key))}</b><span>${esc(sub)}</span></span>
-      <span class="n">${d.est > d.pax / 2 ? '≈ ' : ''}${fmtPax(d.pax)}<small>${d.routes.length > 1 ? d.routes.length + ' routes' : 'from ' + A[mine.has(R[d.routes[0]].a) ? R[d.routes[0]].a : R[d.routes[0]].b].code}</small></span></button>`;
+    const ports = placeAirports(d.key), x = A[ports[0]], also = ports.slice(1).map(i => A[i].code);
+    const from = [...d.from].sort((p, q) => q[1] - p[1]);
+    const daily = d.routes.every(i => R[i].freq) ? d.routes.reduce((s, i) => s + R[i].freq.perWeek, 0) / 7 : null;
+    const seg = from.map(([k, n]) => `<i style="flex:${n};background:${color(k)}"></i>`).join('');
+    return `<button class="row" data-pair="c${c.k}|${d.key}"><span class="bar split" style="width:calc((100% - 32px) * ${Math.max(0.02, d.pax / top).toFixed(3)})">${seg}</span>
+      ${codeTag(x.code)}<span class="t"><b>${esc(placeName(d.key))}${also.length ? ` <small>also ${esc(also.join(', '))}</small>` : ''}</b>
+      <span>${esc(country(x.cc))} · from ${from.map(([k]) => port(k)).join(' ')}</span></span>
+      <span class="n">${d.est > d.pax / 2 ? '≈ ' : ''}${fmtPax(d.pax)}<small>${daily ? `${daily >= 1.5 ? fmtInt(daily) + ' a day' : daily >= 0.9 ? 'daily' : Math.max(1, Math.round(daily * 7)) + ' a week'}` : d.est > d.pax / 2 ? 'estimate' : ''}</small></span></button>`;
   };
   return `${backButton()}
   <div class="dhead"><div><h2>${esc(c.name)}</h2><div class="sub">${esc(country(c.cc))} · ${c.airports.length} airports</div></div></div>
-  <div class="stats"><div><b>${fmtPax(pax)}</b><span>passengers a year</span></div><div><b>${fmtInt(list.length)}</b><span>places nonstop</span></div>
+  <div class="stats"><div><b>${fmtPax(pax)}</b><span>passengers a year</span></div><div><b>${fmtInt(list.length)}</b><span>destinations</span></div>
     <div><b>${countries.size}</b><span>countries</span></div></div>
-  <div class="sec">Airports</div>${c.airports.map(i => airportRow(A[i], `${fmtPax(A[i].pax)}<small>${A[i].pax / pax < 0.005 ? '<1' : Math.round(100 * A[i].pax / pax)}%</small>`)).join('')}
-  <div class="sec">Destinations by passengers <small>· cities with several airports together</small></div>${lazy(list, row)}
-  <div class="note small">Passengers are for all of ${esc(c.name)}’s airports together. A+ marks a city with several airports.</div>`;
+  <div class="sec">Airports <small>· each in its color on the map</small></div>${c.airports.map(portRow).join('')}
+  <div class="sec">Destinations <small>· busiest first, from any of them</small></div>${lazy(list, row)}
+  <div class="note small">A destination’s passengers and flights are for all of ${esc(c.name)}’s airports together; its bar is split by the airports they fly from. A city with several airports counts as one destination.</div>`;
 }
 
 // every route between two places (a city, or an airport): London to New York is nine routes
@@ -1437,8 +1475,9 @@ body.addEventListener('mouseover', e => {
   const wy = e.target.closest('[data-way]');
   if (wy && S.view.t === 'route') { hoverWay(R[S.view.i], +wy.dataset.way); return; }
   const t = e.target.closest('[data-route]'), o = e.target.closest('[data-opt]'), pr = e.target.closest('[data-pair]');
+  const ap = S.view.t === 'city' && e.target.closest('[data-airport]');
   setHover(t ? +t.dataset.route : o && S.view.t === 'trip' ? tripOptions(S.view.a, S.view.b)[+o.dataset.opt]
-    : pr ? placeRoutes(...pr.dataset.pair.split('|')) : null);
+    : pr ? placeRoutes(...pr.dataset.pair.split('|')) : ap ? A[+ap.dataset.airport].routes : null);
   const b = e.target.closest('.reach [data-band]');
   spotlightBand(b ? +b.dataset.band : null);
 });
