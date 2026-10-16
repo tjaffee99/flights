@@ -378,24 +378,27 @@
         "source": "India's reciprocal NOTAMs"
       },
       {
+        "name": "Iran",
+        "avoid": [
+          "IR"
+        ],
+        "airlines": "all",
+        "since": "2026-02",
+        "source": "Open on paper since mid-2026 (the east only), but avoided by almost every foreign airline since the strikes of February 2026; EASA CZIB-2026-04, the FAA's prohibition"
+      },
+      {
         "name": "Conflict zones",
         "avoid": [
-          "IR",
           "IQ",
           "LB",
-          "SY",
-          "LY",
-          "YE",
           "SD",
-          "SO",
-          "ML",
-          "AF"
+          "YE"
         ],
         "airlines": [
           "west"
         ],
         "since": "2026-02",
-        "source": "EASA conflict zone bulletins (CZIB-2026-04 Iran, -05 Iraq, -06 Lebanon; Syria, Libya, Yemen, Sudan, Somalia, Mali, Afghanistan) and the FAA's matching prohibitions"
+        "source": "EASA conflict zone bulletins that advise against all altitudes: Iraq (CZIB-2026-05), Lebanon (-06), Sudan (CZIB-2023-01), Yemen over land (CZIB-2017-07); France's and Italy's notices for Iraq. Afghanistan, Syria, Libya, Mali and Somalia aren't avoided: their warnings now cover only flights below FL260-FL320, and airliners cross them above it"
       },
       {
         "name": "North Korea",

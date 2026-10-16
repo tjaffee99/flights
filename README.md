@@ -8,8 +8,9 @@ fly the route in a year.
   airport to see the way there.
 - Click a route for its passengers, how often it flies (flights a day, seats a flight, how full),
   its flight time each way, the distance flown, its airlines and sources. Where some of its airlines
-  go around closed airspace (Russia, Ukraine, Iran…), the map draws the way most of them fly and
-  the panel lists each way with its distance and time.
+  go around closed airspace (Russia, Ukraine, Iran…), the panel lists each way with its distance
+  and time, and with *Around closed airspace* on (off at first) the map draws the way most of them
+  fly instead of the great circle.
 - With an airport open, shift-click another for the way between them: the nonstop route if there
   is one, else every way with the fewest flights (via Doha, via Istanbul…), best first, with their
   times and how often their flights go.
@@ -169,15 +170,19 @@ airlines avoid what is in `overrides.json` (`airspace`), as of October 2026:
   Japanese airlines, which have kept out since 2022
 - Belarus: the same Western airlines
 - Pakistan for Indian airlines, and India for Pakistani ones (monthly notices since April 2025)
-- Iran, Iraq, Lebanon, Syria, Libya, Yemen, Sudan, Somalia, Mali and Afghanistan: Western
-  airlines, following EASA's conflict zone bulletins and the FAA
+- Iran: every airline but Iran's own. It's partly open on paper, but almost every foreign airline
+  has kept out since the strikes of February 2026
+- Iraq, Lebanon, Sudan and Yemen (over land): Western airlines, following EASA's conflict zone
+  bulletins, which advise against them at every altitude. Afghanistan, Syria, Libya, Mali and
+  Somalia aren't avoided: their warnings now cover only flights below FL260–FL320, and airliners
+  cross them above it (Europe–Asia traffic over Afghanistan has grown since the Middle East closed)
 - North Korea: every airline
 - The Tibetan Plateau, Karakoram and Pamirs: every airline (with no lower ground to descend to,
   airliners keep off them)
 
 An airline's country is the one most of its routes touch, and a route never avoids a country it
 flies to or from. Partial closures (parts of Saudi Arabia, the waters of the Gulf) aren't modelled.
-Of 33,000 routes, about 1,700 are flown around something by some of their airlines. The rules
+Of 33,000 routes, about 2,100 are flown around something by some of their airlines. The rules
 need checking when the news changes: the monthly rebuild doesn't.
 
 **Cities.** Airports are grouped by the first place their Wikipedia infobox says they serve (all six

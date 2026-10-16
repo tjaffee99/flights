@@ -138,7 +138,7 @@ function arc(x, y, km, polar = null) {
 
 // a route's line on the map: the great circle, or the way most of its airlines fly around closed airspace
 function routeArc(r, polar = null) {
-  if (!r.ways || !r.ways[0].pts.length) return arc(A[r.a], A[r.b], r.km, polar);
+  if (!S.detours || !r.ways || !r.ways[0].pts.length) return arc(A[r.a], A[r.b], r.km, polar);
   return wayArc([A[r.a], ...r.ways[0].pts, A[r.b]], polar);
 }
 function wayArc(stops, polar = null) {
@@ -445,7 +445,7 @@ out vec4 fragColor;
 void main() { fragColor = u_color * clamp(u_half + 0.5 - abs(v_dist), 0.0, 1.0); }`;
 function polarLayer(id, styles) {
   const programs = {};
-  let vao = null, spans = null;
+  let vao = null, spans = null, built = -1;
   const program = (gl, shader) => {
     if (programs[shader.variantName]) return programs[shader.variantName];
     const compile = (type, source) => {
@@ -498,7 +498,11 @@ function polarLayer(id, styles) {
       const draws = styles();
       if (!draws.length) return;
       const prog = program(gl, args.shaderData), d = args.defaultProjectionData, u = prog.u;
-      if (!vao) build(gl, prog);
+      if (!vao || built !== polarVersion) {
+        if (vao) gl.deleteVertexArray(vao);
+        build(gl, prog);
+        built = polarVersion;
+      }
       gl.useProgram(prog.prog);
       gl.uniformMatrix4fv(u.u_projection_matrix, false, d.mainMatrix);
       gl.uniformMatrix4fv(u.u_projection_fallback_matrix, false, d.fallbackMatrix);
@@ -542,10 +546,11 @@ function HOME() {
   const zoom = 1.55 + Math.log2(Math.max(200, Math.min(0.86 * h, 0.92 * w)) / 460);
   return { center: [-30, 30], zoom, padding: pad };
 }
-let map = null, routeGeo = null, airportGeo = null, POLAR = [];
+let map = null, routeGeo = null, airportGeo = null, POLAR = [], polarVersion = 0;
 
 function buildGeo() {
   POLAR = [];
+  polarVersion++;   // the polar layers rebuild their buffers
   routeGeo = { type: 'FeatureCollection', features: R.map(r => {
     const polar = [], coordinates = routeArc(r, polar);
     if (polar.length) POLAR.push({ r, stretches: polar });
@@ -577,6 +582,7 @@ const S = {
   min: 0,          // minimum passengers per route
   dom: true, intl: true,
   lines: stored('flights.lines', 'on') !== 'off',
+  detours: stored('flights.detours', 'off') === 'on',   // draw routes around closed airspace, not as great circles
   collapsed: stored('flights.panel', 'open') === 'closed',
   q: '',
 };
@@ -649,6 +655,7 @@ function showLines() {
     }
   }
   $('#lines').setAttribute('aria-checked', String(S.lines));
+  $('#detours').setAttribute('aria-checked', String(S.detours));
   $('#mapopts').classList.toggle('off', !S.lines);
 }
 
@@ -1107,7 +1114,7 @@ function aboutText() {
   The rest are estimates, marked ≈, fitted to each airport’s yearly total.${e ? ` Tested on routes whose official counts they didn’t see, half the estimates came within ×${e.median.toFixed(1)} of the real number (between ${(1 / e.median).toFixed(1)} and ${e.median.toFixed(1)} times it) and 80% within ×${e.p80.toFixed(1)}.` : ''}</p>
   <p>They are least sure where little is published: China, Russia, the Gulf, Southeast Asia, Canada’s domestic routes, and countries at war or under sanctions, whose flights also change faster than anyone writes them down.</p>
   <p>Flight times are the US DOT’s averages, gate to gate, where it has them; elsewhere they’re estimated from the distance flown and the jet streams${D.time_model ? `, which comes within ${D.time_model.median} minutes of the US averages on the typical route` : ''}.
-  Routes are drawn around the airspace their airlines avoid${D.airspace ? `: ${esc(D.airspace.map(a => a.name.replace(/^The /, 'the ')).join('; '))}` : ''}.
+  With <i>Around closed airspace</i> on (in these options), routes are drawn the way their airlines fly around the airspace they avoid${D.airspace ? `: ${esc(D.airspace.map(a => a.name.replace(/^The /, 'the ')).join('; '))}` : ''}; a route’s panel lists its ways either way.
   The airlines that avoid each are those of the countries that close it or are told to keep out${D.airspace_as_of ? `, as of ${esc(D.airspace_as_of)}` : ''}.</p>`;
 }
 
@@ -1444,6 +1451,17 @@ $('#mapopts').addEventListener('click', e => {
     S.lines = !S.lines;
     store('flights.lines', S.lines ? 'on' : 'off');
     showLines();
+  } else if (t.id === 'detours') {
+    S.detours = !S.detours;
+    store('flights.detours', S.detours ? 'on' : 'off');
+    t.setAttribute('aria-checked', String(S.detours));
+    setTimeout(() => {   // redrawing every route takes a moment: let the switch move first
+      buildGeo();
+      if (map && map.getSource('routes')) {
+        map.getSource('routes').setData(routeGeo);
+        S.hover = null; setHover(null); showSelection(); map.triggerRepaint();
+      }
+    }, 200);
   } else if (t.dataset.min !== undefined) { S.min = +t.dataset.min; applyFilters(); }
   else if (t.id === 'cdom' || t.id === 'cintl') {
     const k = t.id === 'cdom' ? 'dom' : 'intl';
