@@ -74,16 +74,27 @@ So Miami–Caracas, which American restarted in April 2026, is on the map.
 no flights touching Ukraine; none between Russia or Belarus and the US, Canada, the UK, the EU,
 Norway, Iceland or Switzerland; none between Israel and Turkey; Air France's suspended Ouagadougou
 and Niamey flights; and airports replaced by new ones (Luanda's international flights, Phnom Penh,
-the old Doha airport), so that listings naming the old one count for the new. Two more lists catch
-airports whose Wikipedia tables outlived them:
+the old Doha airport), so that listings naming the old one count for the new. More lists catch
+Wikipedia tables that outlived the flights in them:
 
 - closed airports: Russia's airports near Ukraine, shut since February 2022 and not reopened
   (Belgorod, Voronezh, Kursk, Rostov-on-Don, Anapa, Bryansk, Lipetsk, Simferopol), though some
   pages still list flights to them (Bovanenkovo's lists Yamal Airlines to Belgorod; Voronezh's own
-  page lists eighteen routes)
+  page lists eighteen routes); Port-au-Prince, without scheduled flights since November 2025;
+  Sana'a; Goma and Bukavu, held by M23 since 2025; Thandwe and Bhamo in Myanmar, held by rebels
 - airports reopened only in part: Khartoum, closed by the war in 2023 and reopened in 2026 for a
   few flights, keeps only the routes and airlines reported flying (Port Sudan, Cairo, Istanbul on
   Sudanese airlines), and its 2017 passenger total isn't used to scale the estimates
+- suspended: airlines that stopped flying somewhere their routes are still listed, each rule with
+  its source. Most follow this year's wars: foreign airlines out of Iran and Iranian ones barred
+  from the UAE, Oman, Turkey, Azerbaijan and Georgia after the US sanctions of September 2026;
+  Israeli airlines out of the UAE; Western airlines that dropped Tel Aviv, Amman, Beirut and some
+  Gulf routes. Others are single airlines: Congo Airways (grounded), Turkish at Juba, Qatar Airways
+  and Kenya Airways at Mogadishu, Conviasa's dropped routes. Only suspensions lasting past the
+  next few weeks are listed, and one with a return date carries it (`until`), so it lapses by
+  itself and the route comes back in the next monthly rebuild
+- unlisted: the few airlines flying a route that Wikipedia doesn't list, where the listed ones
+  left (Iran Air on Tehran–Istanbul, after Turkey barred Mahan Air)
 
 ## How many passengers
 

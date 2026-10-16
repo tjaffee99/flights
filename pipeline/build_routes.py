@@ -562,6 +562,7 @@ def main():
             if not wiki[key]['airlines']:
                 del wiki[key]
     drop_suspended(wiki, airports, overrides)
+    add_unlisted(wiki, overrides)
     measured, measured_sources, covered_by = load_measured(airports)
     reported = check_reported(load_reported(airports, today), measured, airports)
     covered = set().union(*covered_by.values()) if covered_by else set()
@@ -749,10 +750,13 @@ def airline_homes(wiki, airports):
 
 def drop_suspended(wiki, airports, overrides):
     """Take airlines off the routes overrides.json says they've stopped flying though Wikipedia still
-    lists them (an airline that left a country, or an airport): each rule names the airlines (or
-    'foreign': all but the country's own, less any 'except') and where ('at' airports, 'countries').
-    A route with no airline left is gone, unless recent official counts show it flying."""
-    rules = overrides.get('suspended', {}).get('rules', [])
+    lists them (an airline that left a country, or an airport): each rule names the airlines ('foreign':
+    all but the country's own, less any 'except'; 'home:IR': all of Iran's) and where ('at' airports,
+    'countries', or just the pairs in 'routes'; and, if given, only on routes that also touch a
+    country in 'with'). A rule with 'until' (a date) lapses then, so a suspension with a return date
+    undoes itself. A route with no airline left is gone, unless recent official counts show it flying."""
+    today = dt.date.today().isoformat()
+    rules = [r for r in overrides.get('suspended', {}).get('rules', []) if r.get('until', '9999') > today]
     if not rules:
         return
     home = airline_homes(wiki, airports)
@@ -760,10 +764,14 @@ def drop_suspended(wiki, airports, overrides):
     dropped = Counter()
     for key in list(wiki):
         for rule in rules:
-            here = set(rule.get('at', [])) & set(key) or {airports[x]['cc'] for x in key} & set(rule.get('countries', []))
-            if not here:
+            ccs = {airports[x]['cc'] for x in key}
+            here = (key in {tuple(sorted(pair)) for pair in rule['routes']}) if 'routes' in rule else \
+                set(rule.get('at', [])) & set(key) or ccs & set(rule.get('countries', []))
+            if not here or ('with' in rule and not ccs & set(rule['with'])):
                 continue
-            if rule['airlines'] == 'foreign':
+            if isinstance(rule['airlines'], str) and rule['airlines'].startswith('home:'):
+                gone = {al for al in wiki[key]['airlines'] if home.get(al) == rule['airlines'][5:]}
+            elif rule['airlines'] == 'foreign':
                 gone = {al for al in wiki[key]['airlines'] if home.get(al) not in rule.get('countries', [])
                         and not named(al) & set(rule.get('except', []))}
             else:
@@ -773,6 +781,23 @@ def drop_suspended(wiki, airports, overrides):
         if not wiki[key]['airlines']:
             del wiki[key]
     print('Suspended per overrides.json: ' + ', '.join(f'{name} ({n} listings)' for name, n in dropped.items()))
+
+
+def add_unlisted(wiki, overrides):
+    """Put airlines on routes they fly that Wikipedia's tables don't list (overrides.json's
+    'unlisted'): Iran Air on Tehran-Istanbul, whose only listed airline is barred from Turkey."""
+    keys = {}
+    for key, name in airlines_seen.items():
+        keys.setdefault(name, key)
+        keys[key] = key
+    for rule in overrides.get('unlisted', {}).get('rules', []):
+        airline = keys.get(rule['airline'], 'name:' + rule['airline'])
+        airlines_seen.setdefault(airline, rule['airline'])
+        for pair in rule['routes']:
+            p = wiki.setdefault(tuple(sorted(pair)), {'by': set(), 'airlines': set(), 'modes': set()})
+            p['by'] |= set(pair)
+            p['airlines'].add(airline)
+            p['modes'].add('scheduled')
 
 
 def flight_ways(routes, wiki, airports, overrides):

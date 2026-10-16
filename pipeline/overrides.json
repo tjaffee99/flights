@@ -4,7 +4,7 @@
     "UA": "Ukrainian airspace has been closed to civil flights since February 2022."
   },
   "closed_airports": {
-    "_comment": "Airports with no flights though some Wikipedia pages still list routes to them; routes touching them are dropped. Russia's southern airports closed in February 2022 and not reopened as of October 2026 (Krasnodar reopened in 2025, Elista and Gelendzhik in 2024): Ural Airlines' list of closed airports and russiable.com.",
+    "_comment": "Airports with no flights though some Wikipedia pages still list routes to them; routes touching them are dropped. Russia's southern airports closed in February 2022 and not reopened as of October 2026 (Krasnodar reopened in 2025, Elista and Gelendzhik in 2024): Ural Airlines' list of closed airports and russiable.com. Port-au-Prince: Sunrise Airways' notices, juno7.ht, FAA NOTAM A0046/26. Sana'a: safeairspace.net/yemen. Goma and Bukavu: ktpress.rw, africaunscrambled.substack.com, Australia's Smartraveller. Thandwe and Bhamo: borderlens.com, Wikipedia.",
     "AAQ": "Closed since February 2022, when Russia shut its airports near Ukraine.",
     "EGO": "Closed since February 2022, when Russia shut its airports near Ukraine.",
     "BZK": "Closed since February 2022, when Russia shut its airports near Ukraine.",
@@ -12,7 +12,13 @@
     "URS": "Closed since February 2022, when Russia shut its airports near Ukraine.",
     "LPK": "Closed since February 2022, when Russia shut its airports near Ukraine.",
     "ROV": "Closed since February 2022, when Russia shut its airports near Ukraine.",
-    "SIP": "Closed since February 2022, when Russia shut its airports near Ukraine (Simferopol is in Crimea)."
+    "SIP": "Closed since February 2022, when Russia shut its airports near Ukraine (Simferopol is in Crimea).",
+    "PAP": "No scheduled passenger flights since the shootings of November 2025: Sunrise Airways has suspended its flights until further notice, and US airlines are barred until March 2027. Cap-Haïtien is Haiti's gateway now.",
+    "SAH": "No commercial flights: Israeli strikes destroyed Yemenia's last aircraft there in May 2025, and the runway was hit again in July 2026. Aden is Yemen's working airport.",
+    "GOM": "No commercial flights since M23 took Goma in January 2025; a UN helicopter landed once in February 2026, but the airport hasn't reopened.",
+    "BKY": "No commercial flights since M23 took Kavumu airport in February 2025.",
+    "SNW": "Held by the Arakan Army since June 2024; Myanmar's airlines no longer fly there.",
+    "BMO": "Held by the Kachin Independence Army since January 2025; Myanmar's airlines no longer fly there."
   },
   "limited_airports": {
     "_comment": "Airports reopened only in part after a closure, whose Wikipedia tables and passenger totals still describe them before it: only the routes and airlines reported flying are kept, the old total isn't used to scale estimates, and the airport's page says why.",
@@ -30,6 +36,531 @@
         "Nova Airways"
       ]
     }
+  },
+  "suspended": {
+    "_comment": "Airlines that stopped flying somewhere though Wikipedia's tables still list them, as of October 2026: build_routes.py's drop_suspended() takes them off those routes. 'airlines' is a list of names, 'foreign' (all but the country's own, less 'except') or 'home:XX' (all of a country's); 'at' airports or 'countries' say where, and 'with' limits a rule to routes that also touch those countries.",
+    "rules": [
+      {
+        "name": "Foreign airlines in Iran",
+        "airlines": [
+          "Pegasus Airlines",
+          "Turkish Airlines",
+          "AJet",
+          "Qatar Airways",
+          "SalamAir",
+          "China Southern Airlines",
+          "Aeroflot",
+          "Air Arabia",
+          "Azerbaijan Airlines",
+          "Kuwait Airways",
+          "Jazeera Airways",
+          "Oman Air",
+          "Emirates",
+          "Flydubai"
+        ],
+        "countries": [
+          "IR"
+        ],
+        "note": "No foreign airline flew to Iran from the strikes of February 2026 until Iraqi Airways in October; Turkish, Pegasus and AJet have taken Iran out of their schedules into 2027 after the US sanctioned Iran's airlines in September",
+        "source": "https://www.turkishminute.com/2026/09/22/turkish-carriers-remove-iran-flights-from-schedules-into-2027-amid-us-sanctions/, https://wanaen.com/first-foreign-airline-resumes-flights-to-iran-after-war/, https://www.salamair.com/en/travel-updates"
+      },
+      {
+        "name": "Iranian airlines barred abroad",
+        "airlines": "home:IR",
+        "countries": [
+          "AE",
+          "OM",
+          "AZ",
+          "GE"
+        ],
+        "note": "The UAE, Oman, Azerbaijan and Georgia stopped Iranian airlines in September 2026, after the US sanctioned them",
+        "source": "https://www.aljazeera.com/economy/2026/9/25/uae-bars-iranian-airlines-as-us-sanctions-squeeze-irans-aviation-sector, https://oc-media.org/iranian-airlines-suspend-flights-to-azerbaijan/"
+      },
+      {
+        "name": "Iranian airlines at Baghdad",
+        "airlines": "home:IR",
+        "at": [
+          "BGW"
+        ],
+        "note": "Baghdad stopped Iranian airlines in September 2026",
+        "source": "https://gulfnews.com/world/mena/turkey-oman-azerbaijan-georgia-uae-stop-mahan-air-flights-airline-quietly-stops-listing-routes-to-india-and-malaysia-1.500690012"
+      },
+      {
+        "name": "Iraqi Airways, Baghdad-Iran",
+        "airlines": [
+          "Iraqi Airways"
+        ],
+        "at": [
+          "BGW"
+        ],
+        "with": [
+          "IR"
+        ],
+        "note": "Iraqi Airways' return to Iran in October 2026 is from Najaf",
+        "source": "https://www.newarab.com/news/iraqi-airways-resumes-najaf-tehran-flights-after-suspension"
+      },
+      {
+        "name": "Mahan Air in Turkey",
+        "airlines": [
+          "Mahan Air"
+        ],
+        "countries": [
+          "TR"
+        ],
+        "note": "Turkey barred Mahan Air in September 2026",
+        "source": "https://gulfnews.com/world/mena/turkey-oman-azerbaijan-georgia-uae-stop-mahan-air-flights-airline-quietly-stops-listing-routes-to-india-and-malaysia-1.500690012"
+      },
+      {
+        "name": "TAP at Caracas",
+        "airlines": [
+          "TAP Air Portugal"
+        ],
+        "at": [
+          "CCS"
+        ],
+        "note": "TAP flies Lisbon to Valencia, not yet back to Caracas after the June 2026 earthquakes",
+        "source": "https://www.dnoticias.pt/2026/9/5/504201-tap-atrasa-regresso-a-caracas"
+      },
+      {
+        "name": "Conviasa's dropped routes",
+        "airlines": [
+          "Conviasa"
+        ],
+        "routes": [
+          [
+            "CCS",
+            "CUN"
+          ],
+          [
+            "CCS",
+            "VKO"
+          ],
+          [
+            "CCS",
+            "BGI"
+          ],
+          [
+            "CCS",
+            "BRM"
+          ],
+          [
+            "VLN",
+            "SVZ"
+          ],
+          [
+            "HAV",
+            "MGA"
+          ]
+        ],
+        "note": "Not in Conviasa's October 2026 timetable",
+        "source": "https://apps.conviasa.aero/apps/itinerario/itinerario_pdf.php"
+      },
+      {
+        "name": "LASER Caracas-Bogotá",
+        "airlines": [
+          "LASER Airlines"
+        ],
+        "routes": [
+          [
+            "CCS",
+            "BOG"
+          ]
+        ],
+        "note": "LASER's Bogotá flights suspended from 13 October 2026",
+        "source": "https://www.aviacionline.com/english/commercial-aviation/latin-america-and-caribbean/venezuela/laser-resumes-flights-between-venezuela-and-aruba_a6ad13acc7f0e2f8050cefaf2"
+      },
+      {
+        "name": "Cubana to Frankfurt",
+        "airlines": [
+          "Cubana de Aviación"
+        ],
+        "routes": [
+          [
+            "HAV",
+            "FRA"
+          ],
+          [
+            "HOG",
+            "FRA"
+          ]
+        ],
+        "note": "Suspended in February 2026; Cubana has no international routes",
+        "source": "https://kuba.ahk.de/es/news/no-mas-vuelos-directos-entre-alemania-y-cuba"
+      },
+      {
+        "name": "Israeli airlines in the UAE",
+        "airlines": "home:IL",
+        "countries": [
+          "AE"
+        ],
+        "note": "Barred from the UAE since 28 February 2026",
+        "source": "https://www.jpost.com/israel-news/article-910953"
+      },
+      {
+        "name": "Airlines out of Tel Aviv",
+        "airlines": [
+          "easyJet",
+          "Ryanair",
+          "Air Canada",
+          "American Airlines",
+          "Flydubai",
+          "Emirates"
+        ],
+        "at": [
+          "TLV"
+        ],
+        "note": "easyJet won't fly to Israel through summer 2027; Ryanair, Air Canada and American haven't returned; flydubai and Emirates suspended Tel Aviv on 30 September 2026",
+        "source": "https://www.jns.org/news/israel-news/easyjet-nixes-israel-flights-for-the-next-year, https://israelwelcome.com/airlines-flying-to-israel-2026"
+      },
+      {
+        "name": "Ryanair at Amman",
+        "airlines": [
+          "Ryanair"
+        ],
+        "at": [
+          "AMM"
+        ],
+        "note": "Every future Amman flight cancelled, none planned through summer 2027",
+        "source": "https://simpleflying.com/ryanair-cancels-all-flights-to-13-destinations/"
+      },
+      {
+        "name": "Wizz Air in the UAE",
+        "airlines": [
+          "Wizz Air"
+        ],
+        "at": [
+          "AUH",
+          "DXB"
+        ],
+        "until": "2027-03-28",
+        "note": "Cancelled for winter 2026-27",
+        "source": "https://www.thenationalnews.com/business/aviation/2026/10/08/wizz-air-cancels-winter-season-flights-to-abu-dhabi-and-dubai-routes/"
+      },
+      {
+        "name": "Wizz Air at Jeddah",
+        "airlines": [
+          "Wizz Air"
+        ],
+        "at": [
+          "JED"
+        ],
+        "until": "2027-03-29",
+        "note": "Nothing on sale before spring 2027",
+        "source": "https://blog.wego.com/wizz-air-jeddah-milan-rome/"
+      },
+      {
+        "name": "British Airways, Abu Dhabi",
+        "airlines": [
+          "British Airways"
+        ],
+        "routes": [
+          [
+            "LHR",
+            "AUH"
+          ]
+        ],
+        "until": "2027-01-10",
+        "note": "Back in January 2027 at the earliest",
+        "source": "https://simpleflying.com/british-airways-pulls-plug-2-long-haul-routes-until-2027/"
+      },
+      {
+        "name": "British Airways, Bahrain",
+        "airlines": [
+          "British Airways"
+        ],
+        "routes": [
+          [
+            "LHR",
+            "BAH"
+          ]
+        ],
+        "until": "2027-03-28",
+        "note": "Back on 28 March 2027",
+        "source": "https://simpleflying.com/british-airways-pulls-plug-2-long-haul-routes-until-2027/"
+      },
+      {
+        "name": "Iberia, Doha",
+        "airlines": [
+          "Iberia"
+        ],
+        "routes": [
+          [
+            "MAD",
+            "DOH"
+          ]
+        ],
+        "until": "2027-03-28",
+        "note": "Suspended until 28 March 2027",
+        "source": "https://www.democrata.es/en/economy/iberia-cancels-again-the-flights-madrid-doha-until-2027-due-to-the-instability-in-the-middle-east/"
+      },
+      {
+        "name": "Condor, Dubai",
+        "airlines": [
+          "Condor"
+        ],
+        "at": [
+          "DXB"
+        ],
+        "until": "2027-03-28",
+        "note": "Dropped from the winter schedule",
+        "source": "https://www.flightglobal.com/networks/2026/09/condor-drops-dubai-routes-amid-challenging-conditions/"
+      },
+      {
+        "name": "LOT, Riyadh and Beirut",
+        "airlines": [
+          "LOT Polish Airlines"
+        ],
+        "at": [
+          "RUH",
+          "BEY"
+        ],
+        "note": "Riyadh withdrawn from sale with no return date; Beirut still suspended",
+        "source": "https://www.rustourismnews.com/2026/08/17/lot-keeps-beirut-flights-suspended-and-drops-riyadh-return/"
+      },
+      {
+        "name": "LOT, Dubai",
+        "airlines": [
+          "LOT Polish Airlines"
+        ],
+        "at": [
+          "DXB"
+        ],
+        "until": "2026-12-03",
+        "note": "Back on 3 December",
+        "source": "https://www.tanie-loty.com.pl/czytelnia/aktualnosci/lot-nie-wroci-do-dubaju-w-pazdzierniku-rejsy-z-warszawy-sa-dostepne-od-3-grudnia/"
+      },
+      {
+        "name": "Lufthansa Group, Beirut",
+        "airlines": [
+          "Lufthansa",
+          "Swiss International Air Lines",
+          "Austrian Airlines"
+        ],
+        "at": [
+          "BEY"
+        ],
+        "until": "2026-12-01",
+        "note": "Suspended through 30 November",
+        "source": "https://irreg.lufthansaexperts.com/en/news/current-information-on-lufthansa-groups-flight-offer-to-and-from-the-middle-east.html"
+      },
+      {
+        "name": "Lufthansa, Dammam and Riyadh",
+        "airlines": [
+          "Lufthansa"
+        ],
+        "at": [
+          "DMM",
+          "RUH"
+        ],
+        "until": "2026-12-01",
+        "note": "Dammam suspended through 30 November, Riyadh through 18 November",
+        "source": "https://irreg.lufthansaexperts.com/en/news/current-information-on-lufthansa-groups-flight-offer-to-and-from-the-middle-east.html"
+      },
+      {
+        "name": "Austrian, Dubai",
+        "airlines": [
+          "Austrian Airlines"
+        ],
+        "at": [
+          "DXB"
+        ],
+        "until": "2026-12-12",
+        "note": "Back on 12 December",
+        "source": "https://irreg.lufthansaexperts.com/en/news/current-information-on-lufthansa-groups-flight-offer-to-and-from-the-middle-east.html"
+      },
+      {
+        "name": "Eurowings, Abu Dhabi",
+        "airlines": [
+          "Eurowings"
+        ],
+        "at": [
+          "AUH"
+        ],
+        "note": "Suspended with no return date",
+        "source": "https://irreg.lufthansaexperts.com/en/news/current-information-on-lufthansa-groups-flight-offer-to-and-from-the-middle-east.html"
+      },
+      {
+        "name": "Transavia, Toulouse-Jeddah",
+        "airlines": [
+          "Transavia"
+        ],
+        "routes": [
+          [
+            "TLS",
+            "JED"
+          ]
+        ],
+        "until": "2027-03-01",
+        "note": "Not on sale through February 2027",
+        "source": "https://blog.wego.com/transavia-jeddah-and-medina/"
+      },
+      {
+        "name": "Congo Airways",
+        "airlines": [
+          "Congo Airways"
+        ],
+        "countries": [
+          "CD"
+        ],
+        "note": "Grounded and bankrupt, with all flights cancelled and no relaunch",
+        "source": "https://www.thestreet.com/travel/congo-airways-remains-bankrupt-all-flights-canceled"
+      },
+      {
+        "name": "Kinshasa-Entebbe (Ebola)",
+        "airlines": [
+          "Uganda Airlines",
+          "Air Congo"
+        ],
+        "routes": [
+          [
+            "FIH",
+            "EBB"
+          ]
+        ],
+        "note": "Suspended over Ebola since 23 May 2026, until further notice",
+        "source": "https://www.monitor.co.ug/uganda/news/national/uganda-airlines-suspends-kinshasa-flights-over-ebola-5471036"
+      },
+      {
+        "name": "Corsair at Bamako",
+        "airlines": [
+          "Corsair International"
+        ],
+        "at": [
+          "BKO"
+        ],
+        "until": "2026-11-25",
+        "note": "Corsair's own notice suspends Bamako until 25 November 2026",
+        "source": "https://www.flycorsair.com/en/information/before-travel/flight-information"
+      },
+      {
+        "name": "Sky Mali to Gao and Mopti",
+        "airlines": [
+          "Sky Mali"
+        ],
+        "at": [
+          "GAQ",
+          "MZI"
+        ],
+        "note": "Halted on 28 April 2026 amid the security crisis, with no restart announced",
+        "source": "https://www.ch-aviation.com/news/167046-sky-mali-halts-flights-amid-security-crisis"
+      },
+      {
+        "name": "Turkish Airlines at Juba",
+        "airlines": [
+          "Turkish Airlines"
+        ],
+        "at": [
+          "JUB"
+        ],
+        "note": "Juba dropped from Turkish's network; its Istanbul-Asmara flight now ends at Asmara",
+        "source": "https://atcnews.org/turkish-airlines-removes-5-african-destinations-from-flight-schedules/"
+      },
+      {
+        "name": "Sudanese airlines in the UAE",
+        "airlines": "home:SD",
+        "countries": [
+          "AE"
+        ],
+        "note": "The UAE stopped Sudanese airlines in August 2025",
+        "source": "https://www.dabangasudan.org/en/all-news/article/uae-suspends-sudan-flights-as-accusations-of-rsf-links-continue"
+      },
+      {
+        "name": "Qatar Airways at Mogadishu",
+        "airlines": [
+          "Qatar Airways"
+        ],
+        "at": [
+          "MGQ"
+        ],
+        "until": "2027-03-28",
+        "note": "Doha-Djibouti-Mogadishu suspended, not back before the summer 2027 season",
+        "source": "https://www.aeroroutes.com/eng/260705-qrnw26"
+      },
+      {
+        "name": "Kenya Airways at Mogadishu",
+        "airlines": [
+          "Kenya Airways"
+        ],
+        "at": [
+          "MGQ"
+        ],
+        "note": "Suspended on 14 October 2024 and not restarted; nothing on sale",
+        "source": "https://www.garoweonline.com/en/world/africa/kenya-airways-suspends-passenger-flights-to-somalia"
+      },
+      {
+        "name": "ITA Airways to Tripoli",
+        "airlines": [
+          "ITA Airways"
+        ],
+        "routes": [
+          [
+            "MJI",
+            "FCO"
+          ]
+        ],
+        "until": "2026-12-03",
+        "note": "Its return slipped to 3 December 2026",
+        "source": "https://www.ch-aviation.com/news/166750-ita-airways-to-resume-tripoli-libya-service-in-late-3q26"
+      },
+      {
+        "name": "flydubai at Yangon",
+        "airlines": [
+          "Flydubai"
+        ],
+        "at": [
+          "RGN"
+        ],
+        "note": "flydubai stopped flying to Yangon in 2023",
+        "source": "https://www.directflights.com/DXB-RGN"
+      },
+      {
+        "name": "China Southern, Yangon-Shenzhen",
+        "airlines": [
+          "China Southern Airlines"
+        ],
+        "routes": [
+          [
+            "RGN",
+            "SZX"
+          ]
+        ],
+        "note": "Last flown in September 2025",
+        "source": "https://www.flightsfrom.com/SZX-RGN"
+      }
+    ]
+  },
+  "unlisted": {
+    "_comment": "Airlines flying routes Wikipedia's tables don't list (yet), as of October 2026: build_routes.py adds them after the 'suspended' rules, so a route whose listed airlines all left still shows the one that flies it.",
+    "rules": [
+      {
+        "name": "Iran Air, Tehran-Istanbul",
+        "airline": "Iran Air",
+        "routes": [
+          [
+            "IKA",
+            "IST"
+          ]
+        ],
+        "note": "Iran Air kept flying Tehran-Istanbul after Turkey barred Mahan Air in September 2026",
+        "source": "https://www.iranintl.com/en/202609286267, https://www.aljazeera.com/news-analysis/2026/10/16/us-sanctions-leave-iranians-facing-flight-cancellations-and-soaring-costs"
+      },
+      {
+        "name": "Iran Air to Karachi",
+        "airline": "Iran Air",
+        "routes": [
+          [
+            "IKA",
+            "KHI"
+          ],
+          [
+            "MHD",
+            "KHI"
+          ]
+        ],
+        "note": "Iran Air restarted Karachi from Tehran and Mashhad on 7 October 2026",
+        "source": "https://businessupturn.com/asia/south-asia/pakistan/iran-air-restarts-karachi-services-from-tehran-mashhad-amid-regional-tensions/"
+      }
+    ]
   },
   "blocked_country_pairs": [
     {
