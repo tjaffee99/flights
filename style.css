@@ -119,6 +119,11 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .trip .code{text-align:center}
 .trip .leg.road .rail::before{width:0;border-left:3px dotted var(--ink3);background:none}
 .trip .stop:focus-visible,.trip .leg:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.row.opt .code{width:auto;min-width:34px;white-space:nowrap}
+.citylink{display:inline-block;margin-top:4px;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--accent);cursor:pointer;text-align:left}
+.citylink:hover{text-decoration:underline}
+.row.opt[aria-pressed="true"]{background:color-mix(in srgb,var(--hot) 10%,transparent)}
+.row.opt[aria-pressed="true"] .code{color:var(--hot)}
 .reach{display:grid;gap:2px;padding:4px 10px 4px;font-size:13px}
 .reach div{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;padding:3px 6px;border-radius:7px;cursor:default}
 .reach div:hover{background:var(--hover)}
@@ -133,6 +138,13 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .filter button[data-unfilter]{width:26px;padding:0;color:var(--ink2)}
 .reach i{width:12px;height:12px;border-radius:6px;box-shadow:0 0 0 1px var(--panel-edge)}
 .reach b{font-weight:600;font-variant-numeric:tabular-nums}
+.freq{padding:0 16px 6px;font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums;text-wrap:pretty}
+.freq b{color:var(--ink);font-weight:600}
+.ways{padding:0 16px 6px}
+.way{padding:6px 8px;margin:0 -8px;border-radius:8px;cursor:default}
+.way:hover{background:var(--hover)}
+.way b{display:block;font-size:13.5px;font-weight:600}
+.way span{display:block;font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
 .dir{padding:0 16px 4px;font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
 .src{padding:4px 16px 8px;font-size:11.5px;line-height:1.4;color:var(--ink3);text-wrap:pretty}
 /* airports without airline flights: grey and italic */

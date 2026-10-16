@@ -38,7 +38,7 @@ import json
 import math
 import re
 import shutil
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -210,12 +210,16 @@ def load_measured(airports):
         return {}, {}, {}
     sources = json.loads((BUILD / 'measured_sources.json').read_text())
     by_source = defaultdict(lambda: defaultdict(list))  # source -> (o, d) -> rows (several reporters)
+    periods = defaultdict(Counter)
     with open(path, newline='') as f:
         for row in csv.DictReader(f):
             o, d = row['origin_iata'], row['dest_iata']
             if o == d or o not in airports or d not in airports or not row['passengers']:
                 continue
             by_source[row['source']][(o, d)].append(row)
+            periods[row['source']][(row['period_start'], row['period_end'])] += 1
+    # the period most of a source's routes cover (Eurostat's is 2024, though Bosnia's ends in 2023)
+    sources['usual_period'] = {k: c.most_common(1)[0][0] for k, c in periods.items()}
 
     pairs = {}
     order = sorted(by_source, key=lambda s: SOURCE_PRIORITY.index(s) if s in SOURCE_PRIORITY else 99)
@@ -260,6 +264,47 @@ def load_measured(airports):
                 if ':' in (r.get('reporter') or ''):
                     covered[source].add(r['reporter'].split(':', 1)[1])    # Eurostat: "ES:MAD"
     return pairs, sources, covered
+
+
+def load_frequency(airports):
+    """How often each route flies and how big and full its planes are, from the official sources that
+    count flights and seats (US T-100, Eurostat, ANAC, BITRE domestic). Taken from the highest-priority
+    source that has them, which may not be the one the route's passengers come from: the UK CAA counts
+    only passengers, so London–Paris gets its flights from Eurostat.
+    Unordered pair -> {'source', 'per_week' (each way, in the weeks it flies), 'months', 'seats' (a flight),
+    'full' (passengers / seats)}."""
+    path = BUILD / 'measured.csv'
+    if not path.exists():
+        return {}
+    by_source = defaultdict(lambda: defaultdict(list))
+    with open(path, newline='') as f:
+        for row in csv.DictReader(f):
+            o, d = row['origin_iata'], row['dest_iata']
+            if o != d and o in airports and d in airports and float(row['departures'] or 0) > 0:
+                by_source[row['source']][(o, d)].append(row)
+    out = {}
+    for source in sorted(by_source, key=lambda s: SOURCE_PRIORITY.index(s) if s in SOURCE_PRIORITY else 99):
+        totals = defaultdict(lambda: {'deps': 0.0, 'seats': 0.0, 'pax': 0.0, 'months': 0, 'ways': 0})
+        for (o, d), rows in by_source[source].items():
+            # both ends of an intra-EU route report the same flights: average the reporters
+            n = len(rows)
+            t = totals[tuple(sorted((o, d)))]
+            t['deps'] += sum(float(r['departures']) for r in rows) / n
+            t['seats'] += sum(float(r['seats'] or 0) for r in rows) / n
+            t['pax'] += sum(float(r['passengers'] or 0) for r in rows) / n
+            span = month_index(rows[0]['period_end']) - month_index(rows[0]['period_start']) + 1
+            t['months'] = max(t['months'], max(int(r['months_with_traffic'] or 0) for r in rows) or span)
+            t['ways'] += 1 if all(r.get('directional', '1') != '0' for r in rows) else 2
+        for key, t in totals.items():
+            if key in out or t['deps'] < 1:
+                continue
+            each_way = t['deps'] / 2 if t['ways'] >= 2 else t['deps']   # one direction reported: take it as each way
+            weeks = min(t['months'], 12) * 365.25 / 12 / 7
+            seats = t['seats'] / t['deps'] if t['seats'] else 0
+            full = t['pax'] / t['seats'] if t['seats'] else 0
+            out[key] = {'source': source, 'per_week': each_way / weeks, 'months': min(t['months'], 12),
+                        'seats': seats if 4 <= seats <= 700 else 0, 'full': full if 0.15 <= full <= 1.02 else 0}
+    return out
 
 
 def load_reported(airports, today):
@@ -613,7 +658,11 @@ def main():
     if removed:
         print(f'Overrides removed {len(removed)} routes: {", ".join(sorted(removed)[:30])}')
 
-    write(routes, wiki, airports, countries, measured_sources, today, overrides, estimate_error)
+    frequency = load_frequency(airports)
+    print(f'Flights and seats for {sum(1 for k in routes if k in frequency)} routes')
+    ways = flight_ways(routes, wiki, airports, overrides)
+    times = flight_times(ways, load_block_times(airports), airports)
+    write(routes, wiki, airports, countries, measured_sources, today, overrides, estimate_error, frequency, ways, times)
 
 
 def wikipedia_titles():
@@ -676,7 +725,162 @@ def ground_links(routes, airports, used):
     return links
 
 
-def write(routes, wiki, airports, countries, measured_sources, today, overrides, estimate_error):
+def flight_ways(routes, wiki, airports, overrides):
+    """The way each route is flown, around the airspace its airlines avoid (overrides.json's 'airspace'):
+    unordered pair -> [{'airlines': [keys], 'km', 'pts': [(lat, lon) waypoints], 'east'}], one for
+    each set of airlines that fly it the same way, busiest way first. An airline's country is the
+    one most of its routes touch (Lufthansa's are German), and a route never avoids a country it
+    flies to or from."""
+    from airspace import Airspace, eastward
+    rules = overrides.get('airspace', {})
+    groups, regions = rules.get('groups', {}), rules.get('regions', {})
+    members = lambda spec: None if spec == 'all' else {c for g in spec for c in groups.get(g, [g])}
+    rule_list = [(set(r['avoid']), members(r['airlines'])) for r in rules.get('rules', [])]
+    space = Airspace({c for avoid, _ in rule_list for c in avoid}, regions)
+    homes = defaultdict(Counter)
+    for (a, b), p in wiki.items():
+        for al in p['airlines']:
+            homes[al][airports[a]['cc']] += 1
+            homes[al][airports[b]['cc']] += 1
+    home = {al: c.most_common(1)[0][0] for al, c in homes.items()}
+
+    def avoided(cc, ends):
+        out = set()
+        for avoid, who in rule_list:
+            if who is None or cc in who:
+                out |= {c for c in avoid if c != cc}
+        # a route flies into the countries (and regions) its ends are in
+        return frozenset(c for c in out if not any(airports[x]['cc'] == c or (c in regions and space.inside(c, airports[x]['lat'], airports[x]['lon']))
+                                                   for x in ends))
+
+    asks = defaultdict(list)    # (origin, avoid) -> [(route, airlines)]
+    variants = {}
+    for key in routes:
+        als = sorted(wiki[key]['airlines']) if key in wiki else []
+        by_avoid = defaultdict(list)
+        for al in als or [None]:
+            by_avoid[avoided(home.get(al), key)].append(al)
+        variants[key] = by_avoid
+        for avoid in by_avoid:
+            if avoid:
+                asks[(key[0], avoid)].append(key)
+    found = {}
+    for n, ((origin, avoid), keys) in enumerate(sorted(asks.items(), key=lambda kv: (kv[0][0], sorted(kv[0][1])))):
+        o = airports[origin]
+        got = space.ways((o['lat'], o['lon']), [(airports[k[1]]['lat'], airports[k[1]]['lon']) for k in keys], avoid)
+        for i, way in got.items():
+            found[(keys[i], avoid)] = way
+    ways = {}
+    for key, by_avoid in variants.items():
+        a, b = (airports[x] for x in key)
+        direct = haversine(a, b)
+        out = []
+        for avoid, als in by_avoid.items():
+            km, pts = found.get((key, avoid), (direct, []))
+            # what it goes around: the avoided places the great circle would have crossed
+            around = sorted(c for c in avoid if not space.clear((a['lat'], a['lon']), (b['lat'], b['lon']), space.closed([c]), (True, True))) if pts else []
+            out.append({'airlines': [al for al in als if al is not None], 'km': km, 'pts': pts, 'around': around,
+                        'east': eastward([(a['lat'], a['lon']), *pts, (b['lat'], b['lon'])])})
+        # ways flown alike merge (an airline that avoids Russia on a route nowhere near it)
+        merged = {}
+        for w in out:
+            sig = tuple((round(lat, 1), round(lon, 1)) for lat, lon in w['pts'])
+            if sig in merged:
+                merged[sig]['airlines'] += w['airlines']
+            else:
+                merged[sig] = w
+        ways[key] = sorted(merged.values(), key=lambda w: (-len(w['airlines']), w['km']))
+    detoured = sum(1 for w in ways.values() if any(v['pts'] for v in w))
+    print(f'Airspace: {detoured} routes flown around closed airspace by some or all of their airlines')
+    return ways
+
+
+def load_block_times(airports):
+    """Average gate-to-gate minutes by direction, from US T-100: (origin, dest) -> (minutes, departures)."""
+    out = {}
+    path = BUILD / 'measured.csv'
+    if not path.exists():
+        return out
+    with open(path, newline='') as f:
+        for row in csv.DictReader(f):
+            if row['source'] == 'us_bts_t100' and row.get('block_minutes') and float(row.get('timed_departures') or 0) >= 20:
+                deps = float(row['timed_departures'])
+                out[(row['origin_iata'], row['dest_iata'])] = (float(row['block_minutes']) / deps, deps)
+    return out
+
+
+TIME_MODEL = {}   # how close the fitted times come to the US averages, for the site
+
+
+def flight_times(ways, block, airports):
+    """Minutes each way for every route: the US average where T-100 has one, else a fit to those
+    averages from the distance flown and how far it runs with or against the jet streams.
+    unordered pair -> (a to b, b to a, measured both ways); and each way's own (a to b, b to a)."""
+    sample = [(w[0]['km'], w[0]['east'] if (o, d) == key else -w[0]['east'], minutes, deps)
+              for key, w in ways.items() if len(w) == 1 and not w[0]['pts']
+              for (o, d) in (key, key[::-1]) if (o, d) in block for minutes, deps in [block[(o, d)]] if deps >= 50]
+    X = np.array([[1, k, e] for k, e, _, _ in sample])
+    y = np.array([m for _, _, m, _ in sample])
+    w = np.sqrt([d for *_, d in sample])
+    coef = np.linalg.lstsq(X * w[:, None], y * w, rcond=None)[0]
+    err = np.abs(X @ coef - y)
+    print(f'Flight times: {coef[0]:.0f} min + {coef[1] * 1000:.1f} min per 1,000 km {coef[2] * 1000:+.1f} min per 1,000 km '
+          f'east in the jet streams, fitted to {len(sample)} US routes; median off by {np.median(err):.0f} min, 90% within {np.percentile(err, 90):.0f}')
+    model = lambda km, east: max(25.0, coef[0] + coef[1] * km + coef[2] * east)
+    TIME_MODEL.update(median=round(float(np.median(err))), p90=round(float(np.percentile(err, 90))), routes=len(sample))
+    times, each = {}, {}
+    for key, w in ways.items():
+        each[key] = [(model(v['km'], v['east']), model(v['km'], -v['east'])) for v in w]
+        ab, ba = each[key][0]
+        mab, mba = block.get(key), block.get(key[::-1])
+        times[key] = (mab[0] if mab else ab, mba[0] if mba else ba, bool(mab and mba))
+    return times, each
+
+
+def city_name(place):
+    """'New York metropolitan area' -> 'New York', 'Greater Boston' -> 'Boston', 'Victoria, British
+    Columbia' -> 'Victoria'."""
+    name = re.sub(r'^(The |Greater )', '', place.split(',')[0])
+    name = re.sub(r' (metropolitan area|Metropolitan Area|Metropolitan Region|metroplex|metro area|area|Region)$', '', name)
+    return name.strip() or place
+
+
+def cities(routes, airports, overrides):
+    """Cities with several airports: [{'name', 'cc', 'airports': [codes, busiest first]}], busiest first.
+    See overrides.json's 'cities' for the rules."""
+    rules = overrides.get('cities', {})
+    pax = defaultdict(float)
+    for (a, b), r in routes.items():
+        pax[a] += r['ab'] + r['ba']
+        pax[b] += r['ab'] + r['ba']
+    serves = {}
+    with open(BUILD / 'wiki_airports.csv', newline='') as f:
+        for row in csv.DictReader(f):
+            if row.get('serves') and pax[row['iata']] >= 100_000:
+                serves[row['iata']] = row['serves']
+    groups = defaultdict(list)
+    for code, place in serves.items():
+        groups[rules.get('rename', {}).get(place) or city_name(place)].append(code)
+    added = {name: [c for c in codes if pax[c]] for name, codes in rules.get('add', {}).items()}
+    taken = {c for codes in added.values() for c in codes}
+    found = []
+    for name, codes in groups.items():
+        if name in added:
+            continue   # 'add' redefines it
+        codes = sorted((c for c in codes if c not in taken), key=lambda c: -pax[c])
+        if codes:
+            top = airports[codes[0]]
+            codes = [c for c in codes if airports[c]['cc'] == top['cc'] and haversine(top, airports[c]) <= 85]
+        found.append((name, codes))
+    found += [(name, sorted(codes, key=lambda c: -pax[c])) for name, codes in added.items()]
+    out = [{'name': name, 'cc': airports[codes[0]]['cc'], 'airports': codes, 'pax': sum(pax[c] for c in codes)}
+           for name, codes in found if len(codes) > 1]
+    out.sort(key=lambda c: -c['pax'])
+    print(f'{len(out)} cities with several airports: ' + ', '.join(f"{c['name']} ({' '.join(c['airports'])})" for c in out[:12]) + ' …')
+    return out
+
+
+def write(routes, wiki, airports, countries, measured_sources, today, overrides, estimate_error, frequency, ways, times):
     titles = wikipedia_titles()
     used = sorted({x for key in routes for x in key})
     index = {x: i for i, x in enumerate(used)}
@@ -700,7 +904,7 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides,
 
     source_list = [{'id': 0, 'key': ESTIMATE, 'name': 'Estimate', 'short': 'estimates'}]
     for s in sorted(measured_sources.get('sources', []), key=lambda s: SOURCE_PRIORITY.index(s['id']) if s['id'] in SOURCE_PRIORITY else 99):
-        start, end = month_index(s['period_start']), month_index(s['period_end'])
+        start, end = (month_index(m) for m in measured_sources.get('usual_period', {}).get(s['id'], (s['period_start'], s['period_end'])))
         source_list.append({'id': len(source_list), 'key': s['id'], 'name': s.get('publisher', s['name']),
                             'short': SHORT_NAMES.get(s['id'], s['name']), 'url': s.get('url', ''),
                             'period': f'{month_name(start)} – {month_name(end)}',
@@ -713,7 +917,15 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides,
                         'name': "Seats in Wikipedia's list of the busiest passenger air routes, at the load factor of its counted routes"})
     source_id = {s['key']: s['id'] for s in source_list}
 
-    out = {'a': [], 'b': [], 'ab': [], 'ba': [], 'src': [], 'al': [], 's': [], 'n': [], 'y': []}
+    # fw: flights a week each way x10, fm: months a year it flies, fs: seats a flight, ff: % of seats
+    # filled, fsrc: the source of these (0 where there's none)
+    # ta, tb: minutes from a to b and back; tq: 1 where both are US averages, not the fit
+    out = {'a': [], 'b': [], 'ab': [], 'ba': [], 'src': [], 'al': [], 's': [], 'n': [], 'y': [],
+           'fw': [], 'fm': [], 'fs': [], 'ff': [], 'fsrc': [], 'ta': [], 'tb': [], 'tq': []}
+    # routes some airlines fly around closed airspace: route index -> [[airlines, km, minutes a to b,
+    # b to a, waypoints as lon, lat, lon, lat...], ...], the way most of its airlines go first
+    around = {}
+    minutes, each = times
     for key in sorted(routes, key=lambda k: -(routes[k]['ab'] + routes[k]['ba'])):
         r = routes[key]
         rough = r['source'] in (ESTIMATE, REPORTED, LISTED, LISTED_SEATS)
@@ -728,6 +940,22 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides,
         out['s'].append(1 if p and p['modes'] <= {'seasonal', 'seasonal_charter'} else 0)
         out['n'].append(r['months'])
         out['y'].append(r['year'])
+        f = frequency.get(key)
+        out['fw'].append(max(1, round(10 * f['per_week'])) if f else 0)
+        out['fm'].append(f['months'] if f else 0)
+        out['fs'].append(round(f['seats']) if f else 0)
+        out['ff'].append(round(100 * f['full']) if f else 0)
+        out['fsrc'].append(source_id.get(f['source'], 0) if f else 0)
+        ta, tb, measured = minutes[key]
+        out['ta'].append(round(ta))
+        out['tb'].append(round(tb))
+        out['tq'].append(1 if measured else 0)
+        w = ways[key]
+        if any(v['pts'] for v in w):
+            around[len(out['a']) - 1] = [[sorted(airline_index[a] for a in v['airlines'] if a in airline_index), round(v['km']),
+                                          round(t[0]), round(t[1]), [round(c, 1) for lat, lon in v['pts'] for c in (lon, lat)],
+                                          [countries.get(c, c) for c in v['around']]]
+                                         for v, t in zip(w, each[key])]
 
     data = {
         'routes_as_of': today.strftime('%B %Y'),
@@ -751,7 +979,14 @@ def write(routes, wiki, airports, countries, measured_sources, today, overrides,
             'wiki': wiki_column(used, airports, titles),
         },
         'routes': out,
+        'around': around,
+        'time_model': TIME_MODEL,
+        'airspace': [{'name': r['name'], 'source': r['source']} for r in overrides.get('airspace', {}).get('rules', [])],
+        'airspace_as_of': overrides.get('airspace', {}).get('as_of', ''),
         'ground': ground_links(routes, airports, used),
+        # cities with several airports: name, country, airports (indices, busiest first)
+        'cities': [{'name': c['name'], 'cc': c['cc'], 'airports': [index[x] for x in c['airports']]}
+                   for c in cities(routes, airports, overrides)],
     }
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')))

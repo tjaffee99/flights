@@ -47,6 +47,8 @@ OUTPUT_COLUMNS = [
     "source", "reporter", "origin_iata", "dest_iata", "passengers", "seats",
     "departures", "months_with_traffic", "first_month", "last_month",
     "period_start", "period_end", "carriers", "directional",
+    "block_minutes", "air_minutes",   # gate to gate and wheels up to down, minutes in all (US only)
+    "timed_departures",               # ... over this many departures (foreign airlines report no times)
 ]
 
 
@@ -293,11 +295,17 @@ def aggregate(monthly: pd.DataFrame):
     m.loc[und, "dest"] = b
 
     keys = ["source", "reporter", "origin", "dest", "directional", "period_start", "period_end"]
+    for c in ("block_minutes", "air_minutes", "timed_departures"):
+        if c not in m:
+            m[c] = float("nan")
     g = m.groupby(keys, sort=True, dropna=False)
     out = g.agg(
         passengers=("passengers", "sum"),
         seats=("seats", lambda s: s.sum(min_count=1)),
         departures=("departures", lambda s: s.sum(min_count=1)),
+        block_minutes=("block_minutes", lambda s: s.sum(min_count=1)),
+        air_minutes=("air_minutes", lambda s: s.sum(min_count=1)),
+        timed_departures=("timed_departures", lambda s: s.sum(min_count=1)),
         months_with_traffic=("ym", "nunique"),
         first_month=("ym", "min"),
         last_month=("ym", "max"),
@@ -310,7 +318,7 @@ def aggregate(monthly: pd.DataFrame):
     # rows built only from non-monthly values (e.g. Eurostat annual fill) have no month info
     out["months_with_traffic"] = out.months_with_traffic.astype("Int64").where(out.first_month.notna())
     out = out.rename(columns={"origin": "origin_iata", "dest": "dest_iata"})
-    for c in ("passengers", "seats", "departures"):
+    for c in ("passengers", "seats", "departures", "block_minutes", "air_minutes", "timed_departures"):
         out[c] = out[c].round().astype("Int64")
     out["carriers"] = out["carriers"].fillna("")
     out = out[OUTPUT_COLUMNS]

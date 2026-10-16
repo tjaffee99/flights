@@ -20,7 +20,7 @@ CSVs are fetched again once they're a week old.
 
 ## Output columns
 
-`source,reporter,origin_iata,dest_iata,passengers,seats,departures,months_with_traffic,first_month,last_month,period_start,period_end,carriers,directional`
+`source,reporter,origin_iata,dest_iata,passengers,seats,departures,months_with_traffic,first_month,last_month,period_start,period_end,carriers,directional,block_minutes,air_minutes,timed_departures`
 
 - `directional=1`: origin→dest only. `directional=0`: both directions combined, with
   origin < dest alphabetically (`uk_caa`, `au_bitre_dom`).
@@ -32,6 +32,9 @@ CSVs are fetched again once they're a week old.
   `au_bitre_dom` they are two-way totals.
 - `months_with_traffic`/`first_month`/`last_month` are empty for Eurostat rows filled
   from annual values (see below).
+- `block_minutes`/`air_minutes`: T-100's RAMP_TO_RAMP and AIR_TIME, minutes summed over
+  `timed_departures`. Only US airlines report them (foreign airlines' rows have zeros and are
+  left out), so divide by `timed_departures`, not `departures`. Empty for other sources.
 - `carriers`: pipe-separated, largest first. T-100 uses IATA-style codes and ANAC uses
   ICAO 3-letter codes. The other sources have no carrier data.
 - Airports are IATA codes as in OurAirports (`cache/airports.csv`). Note that BTS `PBI`

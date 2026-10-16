@@ -20,7 +20,7 @@ from measured_common import CACHE, Airports, Http, log, months_between, window_1
 SOURCE_ID = "us_bts_t100"
 FORM_URL = "https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FMG&QO_fu146_anzr=Nv4%20Pn44vr45"
 POST_URL = "https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FMG&QO_fu146_anzr=Nv4+Pn44vr45"
-FIELDS = ["PASSENGERS", "SEATS", "DEPARTURES_PERFORMED", "ORIGIN", "DEST",
+FIELDS = ["PASSENGERS", "SEATS", "DEPARTURES_PERFORMED", "RAMP_TO_RAMP", "AIR_TIME", "ORIGIN", "DEST",
           "ORIGIN_COUNTRY", "DEST_COUNTRY", "UNIQUE_CARRIER", "CLASS", "YEAR", "MONTH"]
 DIR = CACHE / "bts_t100"
 # BTS codes that are not IATA codes, verified by hand (route/carrier pattern).
@@ -40,7 +40,8 @@ META = {
     "license": "US federal government work; public domain (no copyright in the US).",
     "measure": "Passengers on board per nonstop flight segment (T-100 PASSENGERS), "
                "CLASS F (scheduled passenger/cargo service) only, rows with 0 passengers dropped; "
-               "SEATS and DEPARTURES_PERFORMED summed over the same rows.",
+               "SEATS, DEPARTURES_PERFORMED, RAMP_TO_RAMP and AIR_TIME (minutes, all departures) summed over "
+               "the same rows.",
     "directional": True,
     "coverage": "All flight segments touching the US and its territories (domestic and "
                 "international), flown by US and foreign carriers.",
@@ -60,6 +61,18 @@ def _validate_zip(path: Path, resp):
     with zipfile.ZipFile(path) as z:
         if not any(n.lower().endswith(".csv") for n in z.namelist()):
             raise ValueError("BTS zip has no CSV")
+
+
+def _has_fields(path: Path) -> bool:
+    """Whether a cached month has every field we ask for (a month saved before a field was added
+    doesn't, and is downloaded again)."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            name = [n for n in z.namelist() if n.lower().endswith(".csv")][0]
+            header = z.open(name).readline().decode("utf-8", "replace").upper()
+        return all(f in header for f in FIELDS)
+    except (OSError, zipfile.BadZipFile, IndexError):
+        return False
 
 
 def _get_form(http: Http, max_age_days: float) -> str:
@@ -86,7 +99,7 @@ def fetch(http: Http) -> tuple[str, str]:
     log(f"[{SOURCE_ID}] latest available month {end}; window {start}..{end}")
     for ym in months_between(start, end):
         dest = DIR / f"t100_segment_all_carrier_{ym.replace('-', '_')}.zip"
-        if dest.exists() and not http.refresh:
+        if dest.exists() and not http.refresh and _has_fields(dest):
             continue
         for attempt in range(6):
             # fresh viewstate for every POST (the form is stateful)
@@ -176,6 +189,10 @@ def load(airports: Airports, start: str, end: str):
         "passengers": df.PASSENGERS.astype(float),
         "seats": df.SEATS.astype(float),
         "departures": df.DEPARTURES_PERFORMED.astype(float),
+        # foreign airlines report no times (zeros): their departures don't count towards the averages
+        "block_minutes": df.RAMP_TO_RAMP.astype(float).where(df.RAMP_TO_RAMP > 0),
+        "air_minutes": df.AIR_TIME.astype(float).where(df.RAMP_TO_RAMP > 0),
+        "timed_departures": df.DEPARTURES_PERFORMED.astype(float).where(df.RAMP_TO_RAMP > 0),
         "carrier": df.UNIQUE_CARRIER.fillna("").astype(str),
         "directional": 1,
         "period_start": start, "period_end": end,

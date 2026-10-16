@@ -127,6 +127,14 @@ def main():
         if r['src'] == 'estimate' and len(r['airlines']) == 1 and r['pax'] > 400_000:
             warn(f'big estimate on one airline: {"-".join(k)} {r["pax"]:,} ({r["airlines"][0]})')
 
+    # --- flight times: the fit to the US averages should stay close (a broken download would not)
+    tm = data.get('time_model') or {}
+    if tm:
+        line = f"flight times fitted to {tm.get('routes', 0):,} US routes: median off by {tm.get('median')} min, 90% within {tm.get('p90')}"
+        (failures.append if tm.get('median', 99) > 20 or tm.get('routes', 0) < 2000 else warn)(line)
+    around = data.get('around') or {}
+    warn(f'{len(around)} routes drawn around closed airspace')
+
     # --- what the sources dropped this time
     status = BUILD / 'airline_status.json'
     if status.exists():

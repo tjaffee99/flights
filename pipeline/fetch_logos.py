@@ -128,12 +128,16 @@ def words(text):
     return {w for w in re.findall(r'[a-z0-9]+', text.lower()) if w not in GENERIC and len(w) > 1}
 
 
+AIRLINE_BOX = re.compile(r'\b(IATA|ICAO|Callsign|Hubs?|Fleet size|Destinations)\b|Industry\s+(Aviation|Aerospace|Airlines?|Air transport)')
+
+
 def page_images(title):
-    """(infobox images, all images) on the airline's English Wikipedia article, as (file, thumbnail
-    URL) in page order. Read from the article itself: the API turns busy callers away."""
+    """(infobox images, all images, whether the infobox is an airline's: None where there's no
+    infobox) on the airline's English Wikipedia article, images as (file, thumbnail URL) in page
+    order. Read from the article itself: the API turns busy callers away."""
     html = polite_get('https://en.wikipedia.org/wiki/' + urllib.parse.quote(title.replace(' ', '_'), safe="()_,'!-."))
     if not html:
-        return [], []
+        return [], [], False
     soup = BeautifulSoup(html, 'lxml')
     def images(root):
         out = []
@@ -148,7 +152,8 @@ def page_images(title):
                     best = part.strip().split()[0]
             out.append((file, 'https:' + best if best.startswith('//') else best))
         return out
-    return images(soup.select_one('table.infobox')), images(soup.select_one('#mw-content-text'))
+    box = soup.select_one('table.infobox')
+    return images(box), images(soup.select_one('#mw-content-text')), bool(AIRLINE_BOX.search(box.get_text(' '))) if box else None
 
 
 def compact(text):
@@ -187,7 +192,9 @@ def article_logos(titles):
     infobox's first PNG, if it turns out to be see-through (check=True)."""
     found = {}
     for k, title in enumerate(titles):
-        infobox, everything = page_images(title)
+        infobox, everything, airline = page_images(title)
+        if airline is False:   # a link to the wrong article (an airport's table linking "Firefly", the insect)
+            continue
         usable = [(f, u) for f, u in infobox if not re.search(r'\.jpe?g$', f, re.I) and not NOT_LOGOS.search(f) and not OLD.search(f)]
         drawings = [(f, u) for f, u in usable if f.lower().endswith('.svg') or named_for(title, f)]   # a PNG may be a photo or a map
         urls = dict(everything)
@@ -196,7 +203,7 @@ def article_logos(titles):
             found[title] = (*drawings[0], False)
         elif guess:
             found[title] = (guess, urls[guess], False)
-        elif usable:   # "AD tagline 23 final.png" for Aero Dili
+        elif usable and airline:   # "AD tagline 23 final.png" for Aero Dili
             found[title] = (*usable[0], True)
         if k % 50 == 49:
             print(f'{k + 1}/{len(titles)} articles', flush=True)

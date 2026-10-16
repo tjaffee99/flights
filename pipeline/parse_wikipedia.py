@@ -3,7 +3,7 @@
 Reads cache/wiki/<IATA>.html.gz (from fetch_wikipedia.py) and writes:
 
     build/wiki_routes.csv   one row per (airport, airline, destination) listed in a passenger table
-    build/wiki_airports.csv each airport's annual passengers and year from its infobox
+    build/wiki_airports.csv each airport's annual passengers and year, and the place it serves, from its infobox
     build/wiki_route_stats.csv passengers per route from airports' "busiest routes" tables
 
 Destinations are links to airport articles. They are resolved to IATA codes through Wikidata's
@@ -211,6 +211,22 @@ def months_covered(text):
     return None
 
 
+def infobox_serves(soup):
+    """The title of the first place the infobox says the airport serves ("London", "New York
+    metropolitan area"), which groups a city's airports."""
+    box = soup.select_one('table.infobox')
+    for row in box.find_all('tr') if box else []:
+        label = row.find('th')
+        if label and label.get_text(' ', strip=True).lower().startswith('serves'):
+            data = row.find('td')
+            for a in data.find_all('a') if data else []:
+                title = link_title(a)
+                if title:
+                    return title
+            return ''
+    return ''
+
+
 def infobox_passengers(soup):
     """(passengers, year) from the infobox's statistics block, if any. A part-year figure is scaled
     up to a year; one-way enplanements are doubled."""
@@ -399,7 +415,7 @@ def main():
                 stats.append({'airport': iata, 'titles': titles, 'text': text, 'passengers': value,
                               'year': stat_year or '', 'one_way': int(one_way),
                               'table': ' / '.join(json.loads(block['data-headings']))})
-        airports.append({'iata': iata, 'title': own_title, 'tables': tables,
+        airports.append({'iata': iata, 'title': own_title, 'tables': tables, 'serves': infobox_serves(soup),
                          'passengers': passengers or '', 'passengers_year': year or ''})
 
     list_path = CACHE / 'lists' / 'busiest_routes.html.gz'
@@ -458,7 +474,7 @@ def main():
         writer.writeheader()
         writer.writerows(listings)
     with open(BUILD / 'wiki_airports.csv', 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['iata', 'title', 'tables', 'passengers', 'passengers_year'])
+        writer = csv.DictWriter(f, fieldnames=['iata', 'title', 'tables', 'passengers', 'passengers_year', 'serves'])
         writer.writeheader()
         writer.writerows(airports)
 

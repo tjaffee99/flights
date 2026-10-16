@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - run: pip install numpy pandas requests beautifulsoup4 lxml python-dateutil Pillow
+      - run: pip install numpy scipy pandas requests beautifulsoup4 lxml python-dateutil Pillow
 
       # Downloads and intermediate files from the last run. GitHub drops caches unused for a week,
       # so a monthly run usually starts cold; a re-run after a failure doesn't.

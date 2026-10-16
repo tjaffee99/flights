@@ -89,5 +89,331 @@
       "to": "DOH",
       "why": "Hamad International replaced the old Doha International for airline flights in 2014."
     }
-  ]
+  ],
+  "cities": {
+    "_comment": "Airports are grouped into cities by the first place their Wikipedia infobox says they serve (all of London's six link to London), keeping those within 85 km of the group's busiest airport, in the same country, with 100,000 passengers or more. 'add' makes groups Wikipedia's links miss (Tokyo's airports link to 'Tokyo' and 'Greater Tokyo Area') and takes their airports out of any other group; 'rename' fixes names the cleanup doesn't ('Keihanshin' is Osaka).",
+    "add": {
+      "Tokyo": [
+        "HND",
+        "NRT"
+      ],
+      "Beijing": [
+        "PEK",
+        "PKX"
+      ],
+      "San Francisco Bay Area": [
+        "SFO",
+        "OAK",
+        "SJC"
+      ],
+      "Washington": [
+        "IAD",
+        "DCA",
+        "BWI"
+      ],
+      "Toronto": [
+        "YYZ",
+        "YTZ"
+      ],
+      "Buenos Aires": [
+        "EZE",
+        "AEP"
+      ],
+      "Stockholm": [
+        "ARN",
+        "BMA"
+      ],
+      "Rome": [
+        "FCO",
+        "CIA"
+      ],
+      "Brussels": [
+        "BRU",
+        "CRL"
+      ],
+      "Venice": [
+        "VCE",
+        "TSF"
+      ],
+      "Dubai": [
+        "DXB",
+        "DWC"
+      ],
+      "Belo Horizonte": [
+        "CNF",
+        "PLU"
+      ],
+      "Reykjavík": [
+        "KEF",
+        "RKV"
+      ]
+    },
+    "rename": {
+      "National Capital Region (India)": "Delhi",
+      "Pearl River Delta": "Guangzhou",
+      "Jing-Jin-Ji": "Beijing",
+      "Keihanshin": "Osaka",
+      "Chūkyō metropolitan area": "Nagoya",
+      "Taipei–Keelung metropolitan area": "Taipei",
+      "The Metropolitan Area of the Aburrá Valley": "Medellín",
+      "Special Region of Yogyakarta": "Yogyakarta",
+      "Buffalo–Niagara Falls metropolitan area": "Buffalo"
+    }
+  },
+  "airspace": {
+    "_comment": "Airspace airlines go around, as of October 2026. Each rule names the countries (Natural Earth codes) or regions to avoid and whose airlines avoid them: 'all', or country codes and groups, an airline's country being the one most of its routes touch. A route never avoids a country it flies to or from. Partial closures (parts of Saudi Arabia's Jeddah FIR, the waters of the Persian Gulf) aren't modelled. Review these when the monthly rebuild runs and update 'as_of'.",
+    "as_of": "October 2026",
+    "groups": {
+      "west": [
+        "AT",
+        "BE",
+        "BG",
+        "HR",
+        "CY",
+        "CZ",
+        "DK",
+        "EE",
+        "FI",
+        "FR",
+        "DE",
+        "GR",
+        "HU",
+        "IE",
+        "IT",
+        "LV",
+        "LT",
+        "LU",
+        "MT",
+        "NL",
+        "PL",
+        "PT",
+        "RO",
+        "SK",
+        "SI",
+        "ES",
+        "SE",
+        "NO",
+        "IS",
+        "LI",
+        "CH",
+        "GB",
+        "US",
+        "CA",
+        "PR",
+        "GU",
+        "VI",
+        "AS",
+        "MP",
+        "RE",
+        "PF",
+        "NC",
+        "GP",
+        "MQ",
+        "GF",
+        "YT",
+        "PM",
+        "WF",
+        "BL",
+        "MF",
+        "GL",
+        "FO",
+        "AW",
+        "CW",
+        "SX",
+        "BQ",
+        "BM",
+        "KY",
+        "VG",
+        "TC",
+        "AI",
+        "MS",
+        "FK",
+        "GI",
+        "JE",
+        "GG",
+        "IM"
+      ]
+    },
+    "regions": {
+      "the Tibetan Plateau": [
+        [
+          70.5,
+          36.5
+        ],
+        [
+          71.5,
+          38.8
+        ],
+        [
+          73.8,
+          39.6
+        ],
+        [
+          77.5,
+          37.2
+        ],
+        [
+          80.5,
+          36.2
+        ],
+        [
+          86,
+          36.4
+        ],
+        [
+          91,
+          37.2
+        ],
+        [
+          97.5,
+          35.6
+        ],
+        [
+          101,
+          33.2
+        ],
+        [
+          100.5,
+          29.5
+        ],
+        [
+          98.5,
+          28.3
+        ],
+        [
+          95.8,
+          29.3
+        ],
+        [
+          92,
+          28.2
+        ],
+        [
+          89,
+          28.2
+        ],
+        [
+          85.5,
+          29.0
+        ],
+        [
+          82,
+          30.3
+        ],
+        [
+          79.2,
+          32.3
+        ],
+        [
+          77.5,
+          34.5
+        ],
+        [
+          75.5,
+          35.8
+        ],
+        [
+          72.8,
+          35.9
+        ],
+        [
+          70.5,
+          36.5
+        ]
+      ]
+    },
+    "rules": [
+      {
+        "name": "Ukraine",
+        "avoid": [
+          "UA"
+        ],
+        "airlines": "all",
+        "since": "2022-02",
+        "source": "Closed to civil flights since Russia's invasion; EASA CZIB-2022-01"
+      },
+      {
+        "name": "Russia",
+        "avoid": [
+          "RU"
+        ],
+        "airlines": [
+          "west",
+          "JP"
+        ],
+        "since": "2022-02",
+        "source": "Russia bars the airlines of the EU, the UK, the US, Canada and about 30 more countries; Japanese airlines have kept out since 2022. EASA CZIB 2025-01"
+      },
+      {
+        "name": "Belarus",
+        "avoid": [
+          "BY"
+        ],
+        "airlines": [
+          "west"
+        ],
+        "since": "2021-06",
+        "source": "EU and UK airlines told to keep out since 2021"
+      },
+      {
+        "name": "Pakistan, for Indian airlines",
+        "avoid": [
+          "PK"
+        ],
+        "airlines": [
+          "IN"
+        ],
+        "since": "2025-04",
+        "source": "Pakistan's NOTAMs, renewed monthly since April 2025 (A0521/26 runs to 24 October 2026)"
+      },
+      {
+        "name": "India, for Pakistani airlines",
+        "avoid": [
+          "IN"
+        ],
+        "airlines": [
+          "PK"
+        ],
+        "since": "2025-04",
+        "source": "India's reciprocal NOTAMs"
+      },
+      {
+        "name": "Conflict zones",
+        "avoid": [
+          "IR",
+          "IQ",
+          "LB",
+          "SY",
+          "LY",
+          "YE",
+          "SD",
+          "SO",
+          "ML",
+          "AF"
+        ],
+        "airlines": [
+          "west"
+        ],
+        "since": "2026-02",
+        "source": "EASA conflict zone bulletins (CZIB-2026-04 Iran, -05 Iraq, -06 Lebanon; Syria, Libya, Yemen, Sudan, Somalia, Mali, Afghanistan) and the FAA's matching prohibitions"
+      },
+      {
+        "name": "North Korea",
+        "avoid": [
+          "KP"
+        ],
+        "airlines": "all",
+        "since": "2017",
+        "source": "Avoided by foreign airlines since its missile tests over the Sea of Japan"
+      },
+      {
+        "name": "The Tibetan Plateau",
+        "avoid": [
+          "the Tibetan Plateau"
+        ],
+        "airlines": "all",
+        "source": "The Tibetan Plateau, Karakoram and Pamirs: if a cabin lost pressure there, there'd be no lower ground to descend to, so airliners keep to the few routes over it they're equipped for"
+      }
+    ]
+  }
 }

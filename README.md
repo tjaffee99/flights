@@ -6,9 +6,16 @@ fly the route in a year.
 - Click an airport to see all its nonstop routes ranked by passengers, the airlines that fly them,
   and (under *Flights away*) how many flights it takes to reach every other airport. Hover an
   airport to see the way there.
-- Click a route for its passengers, flight time, distance, airlines and source.
+- Click a route for its passengers, how often it flies (flights a day, seats a flight, how full),
+  its flight time each way, the distance flown, its airlines and sources. Where some of its airlines
+  go around closed airspace (Russia, Ukraine, Iran…), the map draws the way most of them fly and
+  the panel lists each way with its distance and time.
 - With an airport open, shift-click another for the way between them: the nonstop route if there
-  is one, else the fewest flights there, stop by stop.
+  is one, else every way with the fewest flights (via Doha, via Istanbul…), best first, with their
+  times and how often their flights go.
+- Search a city with several airports (London, New York, Tokyo) for all its airports together:
+  their destinations, by city where those have several airports too, and every route between two
+  cities (London–New York is nine).
 - Click an airline for its whole network (every other route goes away); pick an airport in it, or
   an airline at an airport, to see just that airline's routes from there.
 - The overview lists every airline, airport and route, biggest first, loading more as you scroll.
@@ -140,8 +147,44 @@ flights) are linked to the nearest airport by a road or ferry trip that counts a
 airport can be reached. Of the ways with the fewest flights, the one shown is the shortest, with
 thinly flown routes counted a little longer so that it connects where people actually connect.
 
-**Flight times** are typical block times for the distance, `45 min + 0.0703 min/km`, fitted to
-schedules from short hops to the longest flights; they're not from timetables.
+**Flights a day, seats and how full** come from the official counts that have flights and seats
+(US T-100, Eurostat, ANAC, BITRE's domestic routes), from the highest-ranked of them that counts the
+route, even when its passengers come from elsewhere: the UK CAA counts only passengers, so
+London–Paris gets its flights from Eurostat. They're each way, averaged over the months the route
+flies. Routes only Wikipedia or the estimates know about have none.
+
+**Flight times** are the US DOT's averages, gate to gate, for every route T-100 times (US
+airlines report their times; foreign ones don't). Everywhere else they're fitted to those averages
+from the distance flown and how far the route runs with or against the jet streams (eastward
+kilometres, weighted towards the 30–50° latitudes where the westerlies blow hardest): 46 minutes,
+plus 71.6 a thousand km, less 7.2 a thousand km run east through the jet streams. On the US
+routes it was fitted to, it's within 6 minutes for the typical route and 18 minutes for nine in ten.
+
+**Closed airspace.** `pipeline/airspace.py` draws the countries airlines avoid onto a half-degree
+grid, finds the shortest way around them, and straightens it into a few great-circle legs. Which
+airlines avoid what is in `overrides.json` (`airspace`), as of October 2026:
+
+- Ukraine: every airline (closed since 2022)
+- Russia: airlines of the EU, the UK, the US, Canada, Switzerland and others Russia bars, and
+  Japanese airlines, which have kept out since 2022
+- Belarus: the same Western airlines
+- Pakistan for Indian airlines, and India for Pakistani ones (monthly notices since April 2025)
+- Iran, Iraq, Lebanon, Syria, Libya, Yemen, Sudan, Somalia, Mali and Afghanistan: Western
+  airlines, following EASA's conflict zone bulletins and the FAA
+- North Korea: every airline
+- The Tibetan Plateau, Karakoram and Pamirs: every airline (with no lower ground to descend to,
+  airliners keep off them)
+
+An airline's country is the one most of its routes touch, and a route never avoids a country it
+flies to or from. Partial closures (parts of Saudi Arabia, the waters of the Gulf) aren't modelled.
+Of 33,000 routes, about 1,700 are flown around something by some of their airlines. The rules
+need checking when the news changes: the monthly rebuild doesn't.
+
+**Cities.** Airports are grouped by the first place their Wikipedia infobox says they serve (all six
+of London's link to *London*), keeping those within 85 km of the group's busiest airport, in the
+same country, with 100,000 passengers or more. `overrides.json` (`cities`) adds groups the links
+miss (Tokyo's airports link to *Tokyo* and *Greater Tokyo Area*) and renames a few (*Keihanshin*
+is Osaka). There are 70.
 
 Airports with a code but no airline flights (general aviation fields like Boca Raton, air bases,
 closed or unfinished airports) are in `data/others.json` and show as grey italic codes when you
@@ -149,7 +192,7 @@ zoom in.
 
 ## Rebuilding the data
 
-Needs Python 3 with numpy, pandas, requests, beautifulsoup4, lxml, python-dateutil and Pillow. Downloads
+Needs Python 3 with numpy, scipy, pandas, requests, beautifulsoup4, lxml, python-dateutil and Pillow. Downloads
 are cached in `pipeline/cache/` and intermediate files go in `pipeline/build/` (neither is
 committed).
 
@@ -161,7 +204,7 @@ python3 parse_wikipedia.py             # current routes, airport totals, busiest
 python3 build_measured.py              # official statistics (see MEASURED.md); needs parse_wikipedia's routes
 python3 fetch_airline_status.py        # which airlines have stopped flying, from their articles
 python3 fetch_logos.py                 # airline logos from Wikidata / Wikimedia Commons (--refresh to choose again)
-python3 build_routes.py                # writes ../data/flights.json and others.json
+python3 build_routes.py                # writes ../data/flights.json and others.json (with airspace.py: ways around closed airspace)
 python3 checks.py                      # compares with the published build; see below
 ```
 
@@ -191,5 +234,6 @@ run, and GitHub emails the repository owner. After reading it, re-run the workfl
 - India: [DGCA](https://www.dgca.gov.in/), via [india-aviation-traffic](https://github.com/Vonter/india-aviation-traffic), [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). The India figures in `data/flights.json` are offered under the same license.
 - Europe: [Eurostat](https://ec.europa.eu/eurostat), reuse with acknowledgement
 - Airline logos: [Wikimedia Commons](https://commons.wikimedia.org/) via [Wikidata](https://www.wikidata.org/); trademarks of their owners
+- Country borders for closed airspace: [Natural Earth](https://www.naturalearthdata.com/), public domain; which airspace is avoided: [EASA conflict zone bulletins](https://www.easa.europa.eu/en/domains/air-operations/czibs) and the notices named in `pipeline/overrides.json`
 - Base map: [OpenFreeMap](https://openfreemap.org/), © OpenMapTiles, © OpenStreetMap contributors
 - [MapLibre GL JS](https://maplibre.org/) 5.24.0, BSD-3-Clause
