@@ -1,11 +1,12 @@
-# Rebuilds data/ from the latest official statistics and Wikipedia once a month, and publishes it
-# only if pipeline/checks.py passes. A failed run (a source down, a check tripped) publishes
-# nothing and leaves build/checks.txt in the run's artifacts; GitHub emails the repo owner.
-name: Monthly data rebuild
+# Rebuilds data/ from Wikipedia every week and from the latest official statistics every month, and
+# publishes it only if pipeline/checks.py passes, with the routes it added and removed in
+# data/changes.json. A failed run (a source down, a check tripped) publishes nothing and leaves
+# build/checks.txt in the run's artifacts; GitHub emails the repo owner.
+name: Weekly data rebuild
 
 on:
   schedule:
-    - cron: '17 6 3 * *'   # 06:17 UTC on the 3rd of each month
+    - cron: '17 6 * * 1'   # 06:17 UTC every Monday
   workflow_dispatch:
     inputs:
       refresh:
@@ -33,9 +34,18 @@ jobs:
       run:
         working-directory: pipeline
     env:
+      # Wikipedia's route tables and the airlines' status are read afresh every week
       REFRESH: ${{ (github.event_name == 'schedule' || inputs.refresh) && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
+
+      # The official statistics come out monthly, and the reference lists and logos barely change:
+      # a scheduled run downloads them again only in the first week of a month.
+      - name: Monthly downloads?
+        run: |
+          if [ "${{ github.event_name }}" = schedule ] && [ "$(date -u +%-d)" -le 7 ] || [ "${{ inputs.refresh }}" = true ]; then
+            echo "FULL=1" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -43,8 +53,8 @@ jobs:
 
       - run: pip install numpy scipy pandas requests beautifulsoup4 lxml python-dateutil Pillow
 
-      # Downloads and intermediate files from the last run. GitHub drops caches unused for a week,
-      # so a monthly run usually starts cold; a re-run after a failure doesn't.
+      # Downloads and intermediate files from the last run (GitHub drops caches unused for a week, so
+      # a run after a missed week starts cold and downloads everything).
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -54,7 +64,7 @@ jobs:
           restore-keys: pipeline-
 
       - name: Reference lists (OurAirports, Wikidata)
-        run: python3 fetch_reference.py ${REFRESH:+--refresh}
+        run: python3 fetch_reference.py ${FULL:+--refresh}
 
       - name: Wikipedia airport articles
         run: python3 fetch_wikipedia.py ${REFRESH:+--refresh}
@@ -65,14 +75,17 @@ jobs:
         # after parse_wikipedia: India's city names pick between a city's airports by Wikipedia's routes.
         # A source that fails keeps its previous rows when there are any; checks.py fails the
         # build if one goes missing.
-        run: python3 build_measured.py ${REFRESH:+--refresh} || echo "::warning::some official sources failed"
+        run: python3 build_measured.py ${FULL:+--refresh} || echo "::warning::some official sources failed"
 
       - run: python3 fetch_airline_status.py ${REFRESH:+--refresh}
-      - run: python3 fetch_logos.py ${REFRESH:+--refresh}
+      - run: python3 fetch_logos.py ${FULL:+--refresh}
       - run: python3 build_routes.py
 
       - name: Checks
         run: python3 checks.py ${{ inputs.force && '--force' || '' }}
+
+      - name: Routes added and removed
+        run: python3 changes.py
 
       - name: Publish
         working-directory: .
@@ -81,7 +94,7 @@ jobs:
           if git diff --cached --quiet; then echo "no changes"; exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m "Monthly data rebuild" -m "$(head -1 pipeline/build/checks.txt)"
+          git commit -m "Weekly data rebuild" -m "$(cat pipeline/build/changes.txt)" -m "$(head -1 pipeline/build/checks.txt)"
           git push
           # pushes made with this workflow's token may not start a Pages build on their own
           gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
@@ -94,6 +107,7 @@ jobs:
           name: checks
           path: |
             pipeline/build/checks.txt
+            pipeline/build/changes.txt
             pipeline/build/measured_sources.json
           if-no-files-found: ignore
 

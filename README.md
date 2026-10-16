@@ -81,7 +81,8 @@ Wikipedia tables that outlived the flights in them:
   (Belgorod, Voronezh, Kursk, Rostov-on-Don, Anapa, Bryansk, Lipetsk, Simferopol), though some
   pages still list flights to them (Bovanenkovo's lists Yamal Airlines to Belgorod; Voronezh's own
   page lists eighteen routes); Port-au-Prince, without scheduled flights since November 2025;
-  Sana'a; Goma and Bukavu, held by M23 since 2025; Thandwe and Bhamo in Myanmar, held by rebels
+  Sana'a; Goma and Bukavu, held by M23 since 2025; Thandwe and Bhamo in Myanmar, held by rebels;
+  Axum, Shire and Humera in Tigray
 - airports reopened only in part: Khartoum, closed by the war in 2023 and reopened in 2026 for a
   few flights, keeps only the routes and airlines reported flying (Port Sudan, Cairo, Istanbul on
   Sudanese airlines), and its 2017 passenger total isn't used to scale the estimates
@@ -90,11 +91,15 @@ Wikipedia tables that outlived the flights in them:
   from the UAE, Oman, Turkey, Azerbaijan and Georgia after the US sanctions of September 2026;
   Israeli airlines out of the UAE; Western airlines that dropped Tel Aviv, Amman, Beirut and some
   Gulf routes. Others are single airlines: Congo Airways (grounded), Turkish at Juba, Qatar Airways
-  and Kenya Airways at Mogadishu, Conviasa's dropped routes. Only suspensions lasting past the
-  next few weeks are listed, and one with a return date carries it (`until`), so it lapses by
-  itself and the route comes back in the next monthly rebuild
+  and Kenya Airways at Mogadishu, Conviasa's dropped routes, the airlines gone from Niamey. Only
+  suspensions lasting past the next few weeks are listed, and one with a return date carries it
+  (`until`), so it lapses by itself and the route comes back in the next weekly rebuild
 - unlisted: the few airlines flying a route that Wikipedia doesn't list, where the listed ones
-  left (Iran Air on Tehran–Istanbul, after Turkey barred Mahan Air)
+  left or the tables lag (Iran Air on Tehran–Istanbul, after Turkey barred Mahan Air; Iran Air
+  back at Najaf; World Atlantic's scheduled charters from Miami)
+
+These were checked against airline notices, timetables, news and flight trackers' departure
+boards in October 2026; a listing nothing could settle either way was left as Wikipedia has it.
 
 ## How many passengers
 
@@ -203,7 +208,7 @@ airlines avoid what is in `overrides.json` (`airspace`), as of October 2026:
 An airline's country is the one most of its routes touch, and a route never avoids a country it
 flies to or from. Partial closures (parts of Saudi Arabia, the waters of the Gulf) aren't modelled.
 Of 33,000 routes, about 2,100 are flown around something by some of their airlines. The rules
-need checking when the news changes: the monthly rebuild doesn't.
+need checking when the news changes: the weekly rebuild doesn't.
 
 **Cities.** Airports are grouped by the first place their Wikipedia infobox says they serve (all six
 of London's link to *London*), keeping those within 85 km of the group's busiest airport, in the
@@ -231,6 +236,7 @@ python3 fetch_airline_status.py        # which airlines have stopped flying, fro
 python3 fetch_logos.py                 # airline logos from Wikidata / Wikimedia Commons (--refresh to choose again)
 python3 build_routes.py                # writes ../data/flights.json and others.json (with airspace.py: ways around closed airspace)
 python3 checks.py                      # compares with the published build; see below
+python3 changes.py                     # the routes added and removed, into ../data/changes.json
 ```
 
 `checks.py` compares the new `data/flights.json` with the last committed one and writes
@@ -243,10 +249,17 @@ things worth a look: busy routes that vanished or doubled, big new routes, airpo
 reported totals, big estimates resting on one airline, and the airlines left out as no longer
 flying.
 
-`.github/workflows/rebuild.yml` runs all of this on the 3rd of every month and commits `data/`
-only if the checks pass. When they fail, nothing is published, `checks.txt` is attached to the
-run, and GitHub emails the repository owner. After reading it, re-run the workflow by hand with
-*force* ticked to publish anyway.
+`pipeline/changes.py` then compares the build with the published one and adds the routes that
+started and stopped to `data/changes.json` (the last 26 updates), which the site lists under
+*Changes*. An update is often an airline starting or ending a route, sometimes a correction (a
+listing fixed on Wikipedia, a rule added to `overrides.json`).
+
+`.github/workflows/rebuild.yml` runs all of this every Monday and commits `data/` only if the
+checks pass. Every week it reads Wikipedia's route tables and the airlines' status afresh; in the
+first week of a month it also downloads the official statistics (which come out monthly), the
+reference lists and the logos again. When the checks fail, nothing is published, `checks.txt` is
+attached to the run, and GitHub emails the repository owner. After reading it, re-run the workflow
+by hand with *force* ticked to publish anyway.
 
 ## Sources and licenses
 

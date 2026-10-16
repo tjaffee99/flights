@@ -4,7 +4,7 @@
     "UA": "Ukrainian airspace has been closed to civil flights since February 2022."
   },
   "closed_airports": {
-    "_comment": "Airports with no flights though some Wikipedia pages still list routes to them; routes touching them are dropped. Russia's southern airports closed in February 2022 and not reopened as of October 2026 (Krasnodar reopened in 2025, Elista and Gelendzhik in 2024): Ural Airlines' list of closed airports and russiable.com. Port-au-Prince: Sunrise Airways' notices, juno7.ht, FAA NOTAM A0046/26. Sana'a: safeairspace.net/yemen. Goma and Bukavu: ktpress.rw, africaunscrambled.substack.com, Australia's Smartraveller. Thandwe and Bhamo: borderlens.com, Wikipedia.",
+    "_comment": "Airports with no flights though some Wikipedia pages still list routes to them; routes touching them are dropped. Russia's southern airports closed in February 2022 and not reopened as of October 2026 (Krasnodar reopened in 2025, Elista and Gelendzhik in 2024): Ural Airlines' list of closed airports and russiable.com. Port-au-Prince: Sunrise Airways' notices, juno7.ht, FAA NOTAM A0046/26. Sana'a: safeairspace.net/yemen. Goma and Bukavu: ktpress.rw, africaunscrambled.substack.com, Australia's Smartraveller. Thandwe and Bhamo: borderlens.com, Wikipedia. Axum, Shire and Humera: the US Embassy in Addis Ababa's alert of 15 October 2026, avionio.com.",
     "AAQ": "Closed since February 2022, when Russia shut its airports near Ukraine.",
     "EGO": "Closed since February 2022, when Russia shut its airports near Ukraine.",
     "BZK": "Closed since February 2022, when Russia shut its airports near Ukraine.",
@@ -18,7 +18,10 @@
     "GOM": "No commercial flights since M23 took Goma in January 2025; a UN helicopter landed once in February 2026, but the airport hasn't reopened.",
     "BKY": "No commercial flights since M23 took Kavumu airport in February 2025.",
     "SNW": "Held by the Arakan Army since June 2024; Myanmar's airlines no longer fly there.",
-    "BMO": "Held by the Kachin Independence Army since January 2025; Myanmar's airlines no longer fly there."
+    "BMO": "Held by the Kachin Independence Army since January 2025; Myanmar's airlines no longer fly there.",
+    "AXU": "No flights since Tigrayan forces' advance in September 2026: Ethiopian suspended Axum on 23 September and hasn't resumed, though Mekelle reopened on 11 October.",
+    "SHC": "No flights since Tigrayan forces' advance in September 2026: Ethiopian suspended Shire on 23 September and hasn't resumed, though Mekelle reopened on 11 October.",
+    "HUE": "No scheduled flights since the Tigray war of 2020."
   },
   "limited_airports": {
     "_comment": "Airports reopened only in part after a closure, whose Wikipedia tables and passenger totals still describe them before it: only the routes and airlines reported flying are kept, the old total isn't used to scale estimates, and the airport's page says why.",
@@ -56,13 +59,16 @@
           "Jazeera Airways",
           "Oman Air",
           "Emirates",
-          "Flydubai"
+          "Flydubai",
+          "Flynas",
+          "Somon Air",
+          "Armenia Airways"
         ],
         "countries": [
           "IR"
         ],
-        "note": "No foreign airline flew to Iran from the strikes of February 2026 until Iraqi Airways in October; Turkish, Pegasus and AJet have taken Iran out of their schedules into 2027 after the US sanctioned Iran's airlines in September",
-        "source": "https://www.turkishminute.com/2026/09/22/turkish-carriers-remove-iran-flights-from-schedules-into-2027-amid-us-sanctions/, https://wanaen.com/first-foreign-airline-resumes-flights-to-iran-after-war/, https://www.salamair.com/en/travel-updates"
+        "note": "No foreign airline flew to Iran from the strikes of February 2026 until Iraqi Airways in October; Turkish, Pegasus and AJet have taken Iran out of their schedules into 2027 after the US sanctioned Iran's airlines in September; Flynas flew Mashhad only for the Hajj, Somon Air hasn't restarted Tehran-Dushanbe and Armenia Airways' Tehran flights are cancelled",
+        "source": "https://www.turkishminute.com/2026/09/22/turkish-carriers-remove-iran-flights-from-schedules-into-2027-amid-us-sanctions/, https://wanaen.com/first-foreign-airline-resumes-flights-to-iran-after-war/, https://www.salamair.com/en/travel-updates, https://www.asiaplus.news/en/2026/10/01/a-longer-route-but-no-price-hike-what-has-changed-on-flights-between-tehran-and-dushanbe/"
       },
       {
         "name": "Iranian airlines barred abroad",
@@ -433,18 +439,6 @@
         "source": "https://www.flycorsair.com/en/information/before-travel/flight-information"
       },
       {
-        "name": "Sky Mali to Gao and Mopti",
-        "airlines": [
-          "Sky Mali"
-        ],
-        "at": [
-          "GAQ",
-          "MZI"
-        ],
-        "note": "Halted on 28 April 2026 amid the security crisis, with no restart announced",
-        "source": "https://www.ch-aviation.com/news/167046-sky-mali-halts-flights-amid-security-crisis"
-      },
-      {
         "name": "Turkish Airlines at Juba",
         "airlines": [
           "Turkish Airlines"
@@ -526,6 +520,225 @@
         ],
         "note": "Last flown in September 2025",
         "source": "https://www.flightsfrom.com/SZX-RGN"
+      },
+      {
+        "name": "Iranian airlines in Saudi Arabia and Kuwait",
+        "airlines": "home:IR",
+        "countries": [
+          "SA",
+          "KW"
+        ],
+        "note": "Kuwait has barred Iranian airlines since the war began; Iran Air's Hajj flights ended in May, and its Umrah charters still await Saudi approval",
+        "source": "https://www.arabnews.jp/en/middle-east/what-we-know-about-us-sanctions-on-iranian-aviation-3000448, https://gulfnews.com/world/gulf/iran-resumes-umrah-after-six-month-pause-with-18000-pilgrims-1.500643961"
+      },
+      {
+        "name": "Kabul-Mashhad",
+        "airlines": [
+          "Mahan Air",
+          "Kish Air",
+          "Iran Air"
+        ],
+        "routes": [
+          [
+            "KBL",
+            "MHD"
+          ]
+        ],
+        "note": "Only Iran Airtour flies Kabul-Mashhad, weekly; Mahan flies Kabul-Tehran and Kish Air Mashhad-Kandahar",
+        "source": "https://www.avionio.com/en/flight/b9-9794"
+      },
+      {
+        "name": "Kam Air to Najaf",
+        "airlines": [
+          "Kam Air"
+        ],
+        "routes": [
+          [
+            "KBL",
+            "NJF"
+          ]
+        ],
+        "note": "No Najaf flights on Kabul's departure boards in October 2026",
+        "source": "https://www.avionio.com/en/airport/kbl/departures"
+      },
+      {
+        "name": "Transavia, Amsterdam-Amman",
+        "airlines": [
+          "Transavia"
+        ],
+        "routes": [
+          [
+            "AMS",
+            "AMM"
+          ]
+        ],
+        "note": "Dropped for winter 2025-26 and missing from the winter 2026-27 schedule",
+        "source": "Routes Online on Transavia's winter 2025-26 schedule, routesonline.com"
+      },
+      {
+        "name": "SAS at Beirut",
+        "airlines": [
+          "Scandinavian Airlines"
+        ],
+        "at": [
+          "BEY"
+        ],
+        "note": "Summer-only routes, not flown in 2026",
+        "source": "SAS Group's summer 2025 route announcement, sasgroup.net"
+      },
+      {
+        "name": "Ethiopian from Mekelle",
+        "airlines": [
+          "Ethiopian Airlines"
+        ],
+        "routes": [
+          [
+            "MQX",
+            "SZE"
+          ]
+        ],
+        "note": "Mekelle's flights since it reopened on 11 October 2026 are to Addis Ababa only",
+        "source": "https://www.avionio.com/en/airport/mqx/departures"
+      },
+      {
+        "name": "Myanmar Airways International from Mandalay",
+        "airlines": [
+          "Myanmar Airways International"
+        ],
+        "routes": [
+          [
+            "MDL",
+            "TPE"
+          ],
+          [
+            "MDL",
+            "OVB"
+          ]
+        ],
+        "note": "Taipei ended in July 2026; the Novosibirsk flights planned from October were cancelled",
+        "source": "https://sib.fm/news/2026/10/04/v-novosibirske-otmeneny-dva-rejsa-aviakompanii-myanmar-airways-international, https://www.directflights.com/RGN-TPE"
+      },
+      {
+        "name": "Air Algérie to Bamako",
+        "airlines": [
+          "Air Algérie"
+        ],
+        "routes": [
+          [
+            "BKO",
+            "ALG"
+          ]
+        ],
+        "note": "Not restarted since Algeria and Mali reopened their airspace in July 2026; left out of Air Algérie's winter routes",
+        "source": "https://www.aeroroutes.com/eng/260820-ahnw26af"
+      },
+      {
+        "name": "Airlines out of Niamey",
+        "airlines": [
+          "Sky Mali",
+          "Air Senegal",
+          "Air Peace"
+        ],
+        "at": [
+          "NIM"
+        ],
+        "note": "None on Niamey's boards in October 2026; Air Senegal's restarted flight runs Dakar-Bamako-Ouagadougou",
+        "source": "https://www.avionio.com/en/airport/nim/departures, https://www.aeroroutes.com/eng/260609-hcjul26bkooua"
+      },
+      {
+        "name": "ASKY, Niamey-Bamako",
+        "airlines": [
+          "ASKY Airlines"
+        ],
+        "routes": [
+          [
+            "NIM",
+            "BKO"
+          ]
+        ],
+        "note": "ASKY's Niamey flights run Lomé-Niamey-Ouagadougou and to Addis Ababa",
+        "source": "https://www.avionio.com/en/flight/kp-46"
+      },
+      {
+        "name": "Afriqiyah, Port Sudan-Tripoli",
+        "airlines": [
+          "Afriqiyah Airways"
+        ],
+        "routes": [
+          [
+            "PZU",
+            "MJI"
+          ]
+        ],
+        "note": "Its 2026 Port Sudan flights were a repatriation airlift, not a schedule",
+        "source": "https://sudantribune.com/article/314013"
+      },
+      {
+        "name": "African Express, Mogadishu-Aden",
+        "airlines": [
+          "African Express Airways"
+        ],
+        "routes": [
+          [
+            "MGQ",
+            "ADE"
+          ]
+        ],
+        "note": "Aden is a former destination; its Yemen flights go to Seiyun",
+        "source": "https://en.wikipedia.org/wiki/African_Express_Airways"
+      },
+      {
+        "name": "RUTACA, Caracas-Bogotá",
+        "airlines": [
+          "RUTACA Airlines"
+        ],
+        "routes": [
+          [
+            "CCS",
+            "BOG"
+          ]
+        ],
+        "note": "Not among the airlines back at Maiquetía after the earthquakes, and no Colombia route",
+        "source": "https://eldiario.com/2026/08/27/aerolineas-terminales-temporales-aeropuerto-maiquetia/"
+      },
+      {
+        "name": "Air Century in Venezuela",
+        "airlines": [
+          "Air Century"
+        ],
+        "countries": [
+          "VE"
+        ],
+        "note": "Its permit for Venezuela ended in July 2026, after a few charters",
+        "source": "https://www.diariolibre.com/economia/turismo/2026/07/15/vuelos-con-venezuela-mejoran-pero-se-limitan-a-pocas-aerolineas/3599689"
+      },
+      {
+        "name": "Air Century, Santiago de Cuba-Curaçao",
+        "airlines": [
+          "Air Century"
+        ],
+        "routes": [
+          [
+            "SCU",
+            "CUR"
+          ]
+        ],
+        "note": "Its only Santiago flight is from La Isabela (JBQ)",
+        "source": "https://www.avionio.com/en/flight/y2-112"
+      },
+      {
+        "name": "Fly All Ways, Havana-Georgetown",
+        "airlines": [
+          "Fly All Ways"
+        ],
+        "routes": [
+          [
+            "HAV",
+            "GEO"
+          ]
+        ],
+        "note": "The flight runs Paramaribo-Georgetown-Kingston-Havana: no Havana-Georgetown nonstop",
+        "source": "https://www.avionio.com/en/flight/8w-725"
       }
     ]
   },
@@ -559,6 +772,54 @@
         ],
         "note": "Iran Air restarted Karachi from Tehran and Mashhad on 7 October 2026",
         "source": "https://businessupturn.com/asia/south-asia/pakistan/iran-air-restarts-karachi-services-from-tehran-mashhad-amid-regional-tensions/"
+      },
+      {
+        "name": "Iran Air to Najaf",
+        "airline": "Iran Air",
+        "routes": [
+          [
+            "IKA",
+            "NJF"
+          ],
+          [
+            "MHD",
+            "NJF"
+          ]
+        ],
+        "note": "Iranian airlines other than Mahan resumed Najaf flights on 4 October 2026",
+        "source": "https://www.dawn.com/news/2034738, https://www.trip.com/flights/status-ir5328"
+      },
+      {
+        "name": "World Atlantic to Cap-Haïtien and Varadero",
+        "airline": "World Atlantic Airlines",
+        "routes": [
+          [
+            "CAP",
+            "MIA"
+          ],
+          [
+            "VRA",
+            "MIA"
+          ]
+        ],
+        "note": "Public charters on a schedule: Miami-Cap-Haïtien about twice a week, Miami-Varadero Mondays and Thursdays",
+        "source": "https://www.avionio.com/en/flight/wl-501, https://www.directoriocubano.info/?p=154713"
+      },
+      {
+        "name": "Fly All Ways via Kingston",
+        "airline": "Fly All Ways",
+        "routes": [
+          [
+            "HAV",
+            "KIN"
+          ],
+          [
+            "GEO",
+            "KIN"
+          ]
+        ],
+        "note": "Its Paramaribo-Georgetown-Kingston-Havana flight",
+        "source": "https://www.avionio.com/en/flight/8w-725"
       }
     ]
   },
