@@ -959,34 +959,7 @@ function airlineRow(al) {
 
 // the overview: headline numbers, then one list at a time, in tabs
 const TABS = [['airlines', 'Airlines', 'Biggest airlines', 'by routes'], ['airports', 'Airports', 'Busiest airports', 'by passengers'],
-              ['routes', 'Routes', 'Busiest routes', 'by passengers'], ['changes', 'Changes']];
-let CH = null;   // data/changes.json: the routes each update added and took off the map, newest first
-
-// the Changes tab: each update's new routes, then the ones that ended
-const fmtDate = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-function changesList() {
-  if (!CH) return '<div class="note">Loading…</div>';
-  if (!CH.updates.length) return '<div class="note">No changes yet.</div>';
-  const at = new Map(A.map(x => [x.code, x.i])), items = [];
-  for (const u of CH.updates) {
-    items.push({ u });
-    for (const e of u.added) items.push({ e, added: true });
-    for (const e of u.removed) items.push({ e, added: false });
-  }
-  const row = ({ u, e, added }) => {
-    if (u) return `<div class="sec">${fmtDate(u.date)} <small>· ${u.added.length} new, ${u.removed.length} ended</small></div>`;
-    const x = at.get(e.a), y = at.get(e.b), live = k => k !== undefined && !A[k].other;
-    // a new route opens; an ended one opens the ways there now (or the airport left)
-    const r = added && live(x) ? A[x].routes.find(i => R[i].a === y || R[i].b === y) : undefined;
-    const go = r !== undefined ? `data-route="${r}"` : live(x) && live(y) ? `data-trip="${x}|${y}"`
-      : x !== undefined ? `data-airport="${x}"` : y !== undefined ? `data-airport="${y}"` : 'disabled';
-    const al = e.airlines.length > 3 ? e.airlines.slice(0, 3).join(', ') + ` +${e.airlines.length - 3}` : e.airlines.join(', ');
-    return `<button class="row change${added ? ' up' : ''}" ${go}><span class="code">${added ? '+' : '−'}</span>
-      <span class="t"><b>${esc(e.a)} – ${esc(e.b)}</b><span>${esc(e.an)} – ${esc(e.bn)}${al ? ' · ' + esc(al) : ''}</span></span>
-      <span class="n">${fmtPax(e.pax)}<small>${added ? 'a year' : 'a year before'}</small></span></button>`;
-  };
-  return `<div class="note small">Routes that started or stopped at each weekly update: an airline starting or ending one, or a correction.</div>${lazy(items, row)}`;
-}
+              ['routes', 'Routes', 'Busiest routes', 'by passengers']];
 let overviewParts = null;
 function overview() {
   if (!overviewParts) {
@@ -1007,10 +980,10 @@ function overview() {
     };
   }
   const tab = TABS.find(([k]) => k === S.tab) || TABS[0];
-  const [items, row] = overviewParts[tab[0]] || [];
+  const [items, row] = overviewParts[tab[0]];
   return `${overviewParts.head}
   <div class="tabs" role="tablist">${TABS.map(([k, label]) => `<button role="tab" data-tab="${k}" aria-selected="${k === tab[0]}">${label}</button>`).join('')}</div>
-  ${tab[0] === 'changes' ? changesList() : `<div class="sec">${tab[2]} <small>· all ${fmtInt(items.length)}, ${tab[3]}</small></div>${lazy(items, row)}`}
+  <div class="sec">${tab[2]} <small>· all ${fmtInt(items.length)}, ${tab[3]}</small></div>${lazy(items, row)}
   ${overviewParts.foot}`;
 }
 
@@ -1484,7 +1457,6 @@ body.addEventListener('click', e => {
   else if (t.dataset.airline !== undefined) selectAirline(+t.dataset.airline);
   else if (t.dataset.city !== undefined) go({ t: 'city', i: +t.dataset.city });
   else if (t.dataset.pair !== undefined) { const [a, b] = t.dataset.pair.split('|'); go({ t: 'pair', a, b }); }
-  else if (t.dataset.trip !== undefined) { const [a, b] = t.dataset.trip.split('|').map(Number); go({ t: 'trip', a, b }); }
   else if (t.dataset.only !== undefined) go(+t.dataset.only === S.view.al ? { t: 'airport', i: S.view.i } : { t: 'airport', i: S.view.i, al: +t.dataset.only }, { fly: false });
   else if (t.hasAttribute('data-alopen')) {
     S.alOpen = !S.alOpen;
@@ -1784,10 +1756,6 @@ fetch('data/flights.json')
     render();
     initMap();
     addEventListener('hashchange', readHash);
-    fetch('data/changes.json').then(r => r.ok ? r.json() : { updates: [] }).catch(() => ({ updates: [] })).then(c => {
-      CH = c;
-      if (S.view.t === 'home' && S.tab === 'changes') render();
-    });
   })
   .catch(err => {
     console.error(err);

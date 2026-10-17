@@ -236,7 +236,7 @@ python3 fetch_airline_status.py        # which airlines have stopped flying, fro
 python3 fetch_logos.py                 # airline logos from Wikidata / Wikimedia Commons (--refresh to choose again)
 python3 build_routes.py                # writes ../data/flights.json and others.json (with airspace.py: ways around closed airspace)
 python3 checks.py                      # compares with the published build; see below
-python3 changes.py                     # the routes added and removed, into ../data/changes.json
+python3 changes.py                     # the routes added and removed, for the commit message
 ```
 
 `checks.py` compares the new `data/flights.json` with the last committed one and writes
@@ -249,10 +249,10 @@ things worth a look: busy routes that vanished or doubled, big new routes, airpo
 reported totals, big estimates resting on one airline, and the airlines left out as no longer
 flying.
 
-`pipeline/changes.py` then compares the build with the published one and adds the routes that
-started and stopped to `data/changes.json` (the last 26 updates), which the site lists under
-*Changes*. An update is often an airline starting or ending a route, sometimes a correction (a
-listing fixed on Wikipedia, a rule added to `overrides.json`).
+`pipeline/changes.py` then compares the build with the published one and lists the routes that
+started and stopped, busiest first, for the commit message. A change is often an airline starting
+or ending a route, sometimes a correction (a listing fixed on Wikipedia, a rule added to
+`overrides.json`).
 
 `.github/workflows/rebuild.yml` runs all of this every Monday and commits `data/` only if the
 checks pass. Every week it reads Wikipedia's route tables and the airlines' status afresh; in the

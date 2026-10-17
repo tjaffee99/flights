@@ -1,6 +1,6 @@
 # Rebuilds data/ from Wikipedia every week and from the latest official statistics every month, and
-# publishes it only if pipeline/checks.py passes, with the routes it added and removed in
-# data/changes.json. A failed run (a source down, a check tripped) publishes nothing and leaves
+# publishes it only if pipeline/checks.py passes, with the routes it added and removed in the commit
+# message. A failed run (a source down, a check tripped) publishes nothing and leaves
 # build/checks.txt in the run's artifacts; GitHub emails the repo owner.
 name: Weekly data rebuild
 
