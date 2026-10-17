@@ -964,7 +964,6 @@ let overviewParts = null;
 function overview() {
   if (!overviewParts) {
     const total = R.reduce((s, r) => s + r.pax, 0);
-    const measured = R.reduce((s, r) => s + (isEst(r) ? 0 : r.pax), 0);
     const live = A.filter(x => x.routes.length).length;
     overviewParts = {
       head: `<div class="intro"><h1>Flight Atlas</h1></div>
@@ -974,17 +973,13 @@ function overview() {
       airlines: [AL.filter(al => al.routes.length).sort((p, q) => q.routes.length - p.routes.length), airlineRow],
       airports: [A.filter(x => x.routes.length).sort((p, q) => q.pax - p.pax), x => airportRow(x)],
       routes: [R, r => routeRow(r, null, R[0].pax)],
-      foot: `<div class="note small">Routes are the ones airlines fly as of ${esc(D.routes_as_of)}, from Wikipedia's airport pages.
-    Passengers are counted for ${Math.round(100 * measured / total)}% of travel (${esc([...new Set(D.sources.filter(s => s.id).map(s => s.short))].join(', '))});
-    the rest are estimates fitted to each airport’s annual total. <a href="${esc(D.about)}" target="_blank" rel="noopener">How this was made</a></div>`,
     };
   }
   const tab = TABS.find(([k]) => k === S.tab) || TABS[0];
   const [items, row] = overviewParts[tab[0]];
   return `${overviewParts.head}
   <div class="tabs" role="tablist">${TABS.map(([k, label]) => `<button role="tab" data-tab="${k}" aria-selected="${k === tab[0]}">${label}</button>`).join('')}</div>
-  <div class="sec">${tab[2]} <small>· all ${fmtInt(items.length)}, ${tab[3]}</small></div>${lazy(items, row)}
-  ${overviewParts.foot}`;
+  <div class="sec">${tab[2]} <small>· all ${fmtInt(items.length)}, ${tab[3]}</small></div>${lazy(items, row)}`;
 }
 
 const WIKI = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2.5H2.5v7h7V7M7 2.5h2.5V5M9.5 2.5 5.5 6.5"/></svg>';
@@ -998,8 +993,7 @@ function reachPanel(x) {
   const reach = reachFrom(x.i), p = pal();
   const rows = [['1 flight', p.reach[0]], ['2 flights', p.reach[1]], ['3 flights', p.reach[2]], ['4 or more', p.reach[3]], ['Can’t be reached', p.unreached]];
   return `<div class="reach">${rows.map(([label, color], k) => reach.counts[k] || k < 4
-    ? `<div data-band="${k}"><i style="background:${color}"></i><span>${label}</span><b>${fmtInt(reach.counts[k])}</b></div>` : '').join('')}</div>
-  <div class="note small">The fewest flights from ${esc(x.code)} to every airport on the map. A few small networks no flight reaches (the Aran Islands, Ketchikan’s floatplanes) count a road or ferry trip as free. Point at a row to pick out those airports, or at an airport to see the way there.</div>`;
+    ? `<div data-band="${k}"><i style="background:${color}"></i><span>${label}</span><b>${fmtInt(reach.counts[k])}</b></div>` : '').join('')}</div>`;
 }
 
 const CHEVRON = '<svg class="chev" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>';
@@ -1035,8 +1029,7 @@ function airportView(x, al = null) {
     <button data-reach="0" aria-pressed="${!S.reach}">Nonstop routes</button><button data-reach="1" aria-pressed="${S.reach}">Flights away</button></span></div>` : ''}
   ${al === null && S.reach ? reachPanel(x) : ''}
   <div class="sec">Destinations by passengers</div>
-  ${lazy(routes, r => routeRow(r, x.i, top)) || '<div class="note">No current passenger routes.</div>'}
-  ${est ? `<div class="note small">≈ marks estimated passengers. Shift-click another airport on the map for the way there.</div>` : ''}`;
+  ${lazy(routes, r => routeRow(r, x.i, top)) || '<div class="note">No current passenger routes.</div>'}`;
 }
 
 // a city's airports together: its destinations, by city where they have several airports
@@ -1080,8 +1073,7 @@ function cityView(c) {
   <div class="stats"><div><b>${fmtPax(pax)}</b><span>passengers a year</span></div><div><b>${fmtInt(list.length)}</b><span>destinations</span></div>
     <div><b>${countries.size}</b><span>countries</span></div></div>
   <div class="sec">Airports <small>· each in its color on the map</small></div>${c.airports.map(portRow).join('')}
-  <div class="sec">Destinations <small>· busiest first, from any of them</small></div>${lazy(list, row)}
-  <div class="note small">A destination’s passengers and flights are for all of ${esc(c.name)}’s airports together; its bar is split by the airports they fly from. A city with several airports counts as one destination.</div>`;
+  <div class="sec">Destinations <small>· busiest first, from any of them</small></div>${lazy(list, row)}`;
 }
 
 // every route between two places (a city, or an airport): London to New York is nine routes
@@ -1128,8 +1120,7 @@ function airlineView(al) {
   <div class="stats"><div><b>${fmtInt(routes.length)}</b><span>routes</span></div><div><b>${fmtInt(ports.size)}</b><span>airports</span></div>
     <div><b>${countries.size}</b><span>countries</span></div></div>
   <div class="sec">Where it flies most <small>· pick one to see its routes from there</small></div>${hubs.map(([k, n]) => airportRow(A[k], `${n}<small>routes</small>`)).join('')}
-  <div class="sec">Routes <small>· busiest first</small></div>${lazy(routes, r => routeRow(r, null, top))}
-  <div class="note small">Passenger numbers are for everyone on the route, on any airline. Airlines come from Wikipedia’s airport pages, which list the brand that sells the flight.</div>`;
+  <div class="sec">Routes <small>· busiest first</small></div>${lazy(routes, r => routeRow(r, null, top))}`;
 }
 
 // a rough block time from distance, fitted to typical schedules (taxi, climb and descent included)
@@ -1154,7 +1145,11 @@ function aboutText() {
   <p>They are least sure where little is published: China, Russia, the Gulf, Southeast Asia, Canada’s domestic routes, and countries at war or under sanctions, whose flights also change faster than anyone writes them down.</p>
   <p>Flight times are the US DOT’s averages, gate to gate, where it has them; elsewhere they’re estimated from the distance flown and the jet streams${D.time_model ? `, which comes within ${D.time_model.median} minutes of the US averages on the typical route` : ''}.
   With <i>Around closed airspace</i> on (in these options), routes are drawn the way their airlines fly around the airspace they avoid${D.airspace ? `: ${esc(D.airspace.map(a => a.name.replace(/^The /, 'the ')).join('; '))}` : ''}; a route’s panel lists its ways either way.
-  The airlines that avoid each are those of the countries that close it or are told to keep out${D.airspace_as_of ? `, as of ${esc(D.airspace_as_of)}` : ''}.</p>`;
+  The airlines that avoid each are those of the countries that close it or are told to keep out${D.airspace_as_of ? `, as of ${esc(D.airspace_as_of)}` : ''}.</p>
+  <p>A route’s passengers are everyone on it, on any airline; point at the number to see where it comes from. Its airlines are the brands that sell the flights, as Wikipedia’s airport pages list them.
+  A city with several airports (London, New York) counts as one destination, with the passengers of all its airports together.</p>
+  <p>Shift-click a second airport for the way there: the ways with the fewest flights, best first (the shortest, through the routes people fly most), with typical times and no time to connect.
+  <i>Flights away</i> colors every airport by the fewest flights it takes from the one picked; a few small networks no flight reaches (the Aran Islands, Ketchikan’s floatplanes) count a road or ferry trip as free.</p>`;
 }
 
 // where its flight times come from
@@ -1210,14 +1205,13 @@ function routeView(r, from) {
   <div class="route-ends">${codeTag(x.code, 'big')}<span class="arrow">⇄</span>${codeTag(y.code, 'big')}</div>
   <div class="dhead" style="padding-top:4px"><div><h2>${esc(x.city || x.name)} – ${esc(y.city || y.name)}</h2>
     <div class="sub">${esc(country(x.cc))}${x.cc === y.cc ? ' · domestic' : ' – ' + esc(country(y.cc))}${r.seasonal ? ' · seasonal' : ''}</div>${pairLink(x, y)}</div></div>
-  <div class="stats"><div><b>${paxLabel(r)}</b><span>passengers a year</span></div>
-    <div><b>${fmtMinutes(routeMinutes(r, x.i))}</b><span>${r.measured ? 'gate to gate' : 'flight time'}</span></div>
+  <div class="stats"><div title="${esc(sourceText(r) + freqSource(r))}"><b>${paxLabel(r)}</b><span>passengers a year</span></div>
+    <div title="${esc(timeSource(r))}"><b>${fmtMinutes(routeMinutes(r, x.i))}</b><span>${r.measured ? 'gate to gate' : 'flight time'}</span></div>
     <div><b>${fmtInt(r.flown)} km</b><span>${r.flown > r.km + 20 ? `${fmtInt(r.km)} km direct` : `${fmtInt(r.flown * 0.621371)} mi`}</span></div></div>
   ${freqLine(r)}
   ${Math.abs(r.ta - r.tb) >= 10 ? `<div class="dir">${esc(x.code)} → ${esc(y.code)} ${fmtMinutes(routeMinutes(r, x.i))} · ${esc(y.code)} → ${esc(x.code)} ${fmtMinutes(routeMinutes(r, y.i))}</div>` : ''}
   ${directional ? `<div class="dir">${esc(x.code)} → ${esc(y.code)} ${fmtInt(xy)} · ${esc(y.code)} → ${esc(x.code)} ${fmtInt(yx)} passengers</div>` : ''}
   ${waysPanel(r, x)}
-  <div class="src">${esc(sourceText(r) + freqSource(r))}. ${esc(timeSource(r))}</div>
   ${r.airlines.length ? `<div class="sec">Airlines</div><div class="als">${r.airlines.map(k => airlineChip(AL[k])).join('')}</div>` : ''}
   <div class="sec">Airports</div>${airportRow(x)}${airportRow(y)}`;
 }
@@ -1250,9 +1244,7 @@ function tripView(a, b) {
   <div class="stats"><div><b>${flights.length}</b><span>flights</span></div><div><b>${fmtMinutes(minutes)}</b><span>in the air</span></div>
     <div><b>${fmtInt(km)} km</b><span>${fmtInt(km * 0.621371)} mi</span></div></div>
   <div class="trip">${stops.map((k, n) => stop(k) + (n < legs.length ? leg(legs[n], k) : '')).join('')}</div>
-  ${options.length > 1 ? `<div class="sec">Ways with ${options[0].length} flights <small>· best first</small></div>${options.map((o, k) => optionRow(a, o, k, k === opt)).join('')}` : ''}
-  <div class="note small">${options.length > 1 ? 'Ways with the fewest flights, best first: the shortest, through the routes people fly most.' : 'The fewest flights between them, by the shortest way through routes people fly most.'}
-    Times are typical for each distance, without time to connect; real itineraries depend on schedules.</div>`;
+  ${options.length > 1 ? `<div class="sec">Ways with ${options[0].length} flights <small>· best first</small></div>${options.map((o, k) => optionRow(a, o, k, k === opt)).join('')}` : ''}`;
 }
 
 // one way there, in the list of ways: where it stops, how long it takes, the airline that flies it all

@@ -154,7 +154,6 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .way b{display:block;font-size:13.5px;font-weight:600}
 .way span{display:block;font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
 .dir{padding:0 16px 4px;font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
-.src{padding:4px 16px 8px;font-size:11.5px;line-height:1.4;color:var(--ink3);text-wrap:pretty}
 /* airports without airline flights: grey and italic */
 .row.other .t b,.dhead.other h2{font-style:italic;font-weight:500;color:var(--ink2)}
 .row.other .code,.dhead.other .code{color:var(--ink3);font-weight:500;font-style:italic}
